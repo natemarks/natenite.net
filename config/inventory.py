@@ -22,6 +22,7 @@ from aws_cdk import App, Environment, Tags
 from config.settings import EnvironmentSetting, get_actual_path
 from config.helper import check_aws_account, check_app_env
 from stack.certificate import CertificateInput, CertificateStack
+from stack.site import SiteInput, SiteStack
 
 
 class Inventory:
@@ -38,16 +39,22 @@ class Inventory:
         check_aws_account(app_env)
         self.data_path = get_actual_path(app_env)
         self.app_env = app_env
-        self.unique_stacks: dict[str, CertificateStack] = {}
+        self.unique_stacks: dict[str, CertificateStack | SiteStack] = {}
         self.environment_setting = EnvironmentSetting.from_data_path(
             self.data_path
         )
 
     def deploy_stacks(self, app: App, cdk_env: Environment):
         """Deploy stacks for this environment."""
-        self.certificate_stack(
+        cert_stack = self.certificate_stack(
             app,
             cdk_env,
+            termination_protection=self.TERMINATION_PROTECTION,
+        )
+        self.site_stack(
+            app,
+            cdk_env,
+            cert_stack,
             termination_protection=self.TERMINATION_PROTECTION,
         )
 
@@ -69,6 +76,27 @@ class Inventory:
             termination_protection=termination_protection,
         )
         return self.unique_stacks["certificate"]
+
+    def site_stack(
+        self,
+        app: App,
+        cdk_env: Environment,
+        certificate_stack: CertificateStack,
+        termination_protection: bool,
+    ) -> SiteStack:
+        """Create and register the single Site stack for this env.
+
+        The Certificate stack must already exist because Site depends on it.
+        """
+        s_input = SiteInput.from_config_directory(self.data_path)
+        self.unique_stacks["site"] = SiteStack(
+            scope=app,
+            cdk_env=cdk_env,
+            s_input=s_input,
+            certificate_stack=certificate_stack,
+            termination_protection=termination_protection,
+        )
+        return self.unique_stacks["site"]
 
 
 class DevInventory(Inventory):
