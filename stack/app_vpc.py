@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from aws_cdk import (
     Stack,
+    aws_certificatemanager as acm,
     aws_ec2 as ec2,
     aws_route53 as r53,
 )
@@ -56,6 +57,8 @@ class AppVpcStack(Stack):
     - VPC with public/private/isolated subnets
     - interface endpoints for core EC2/SSM/ECS services
     - private Route53 hosted zone scoped to the VPC
+    - public Route53 hosted zone for the environment domain
+    - ACM certificate for the environment domain and wildcard subdomain
     """
 
     def __init__(
@@ -133,4 +136,20 @@ class AppVpcStack(Stack):
             zone_name=f"{self.s_input.env_setting.app_env}.internal."
             f"{self.s_input.env_setting.default_fqdn}",
             vpc=self.vpc,
+        )
+        self.public_r53_zone = r53.PublicHostedZone(
+            self,
+            f"{self._prefix}PublicR53Zone",
+            zone_name=self.s_input.env_setting.default_fqdn,
+        )
+        self.certificate = acm.Certificate(
+            self,
+            f"{self._prefix}Certificate",
+            domain_name=self.s_input.env_setting.default_fqdn,
+            subject_alternative_names=[
+                f"*.{self.s_input.env_setting.default_fqdn}"
+            ],
+            validation=acm.CertificateValidation.from_dns(
+                self.public_r53_zone
+            ),
         )
