@@ -24,8 +24,8 @@ def test_get_actual_environment(environment):
 @pytest.mark.unit
 def test_environment_factory_reads_expected_environment():
     """EnvironmentSetting.from_data_path returns the expected model."""
-    data_path = get_actual_path("dev")
+    data_path = get_actual_path("production")
     result = EnvironmentSetting.from_data_path(data_path)
 
     assert isinstance(result, EnvironmentSetting)
-    assert result.app_env == "dev"
+    assert result.app_env == "production"

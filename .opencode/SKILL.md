@@ -28,7 +28,7 @@ Checklist:
 - Follow CDK v2 patterns already used under `stack/`.
 - Build stack input via `from_config_directory` constructors.
 - Preserve naming/prefix conventions (`APP_NAME` + environment).
-- Keep stack dependencies explicit (SimpleAsg depends on AppVpc).
+- Keep stack dependencies explicit when adding new stacks.
 - Prefer Make wrappers for CDK operations.
 
 ## 3) Pytest Expert

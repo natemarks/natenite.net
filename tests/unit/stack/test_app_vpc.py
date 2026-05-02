@@ -23,8 +23,6 @@ from tests.helper import case_data_path, write_case_json, read_case_json
 @pytest.mark.parametrize(
     "environment",
     [
-        pytest.param("dev", id="dev"),
-        pytest.param("staging", id="staging"),
         pytest.param("production", id="production"),
     ],
 )

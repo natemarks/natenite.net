@@ -52,21 +52,15 @@ There is a config data directory for each environment.  Let's
 look at the dev environment :
 
 All dev environment the files are in config/dev/. The stack input classes use
-this directory as a parameter.  All configuratiojn directories are organized in
+this directory as a parameter.  All configuration directories are organized in
 the same way, so the input class can locate every individual file it needs by
 just starting with the config directory path.  Each file has a corresponding
 data class in config.settings
 
 environment.json -> settings.EnvironmentSetting
 app_vpc/app_vpc.json -> settings.AppVpcSetting
-simple_asg/aaa/simple_asg.json -> settings.SimpleAsgSetting
 
 Dataclasses are used to make it easy to access/manage/update the data files.
-Note that stacks that ccan be deployed many times in an environment have an
-extra directory that matches the 'stack_id'. In this case,
-simple_asg/aaa/simple_asg.json contains the asg specific settings for the ASG
-with the stack_id 'aaa'. I can deploy many ASG stack so long as each has a
-unique stack_id
 
 To deploy a stack, I use the stack input class (ex. stack.app_vpc.AppVpcInput).
 It requries the config directory path. Using that it gathers the required

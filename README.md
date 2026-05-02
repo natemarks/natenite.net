@@ -58,23 +58,12 @@ email, but be prepared to wait. :)
 
 ## Demonstration
 
-CDK deploys and destroys Cloudformation stacks. That's it. I find it useful to
-organize my stacks based on whether or not I can deploy them multiple times in
-each environment. To demonstrate these two types, I provide a unique stack
-module (app_vpc.py) and a multiple stack module (simple_asg.py).
+CDK deploys and destroys Cloudformation stacks. This project demonstrates
+infrastructure deployment patterns using Python and CDK.
 
 app_vpc.py deploys a VPC with a few of my favorite features. This is a unique
 stack, meaning that there will be exactly one app vpc stack in each
 environment.
-
-simple_asg.py deploys an autoscaling group, but it can be used many times in
-each environment. Multiple stacks like this one support an extra 'stack_id'
-attribute to distinguish between the different simple_asg stacks in an
-environment. This is obviously not needed for app_vpc which can only exist once
-in an environment.
-
-Also, the simple_asg stacks are build on the app_vpc, so they depend upon it.
-This dependency is automatic in CDK, but it's nice to demonstrate it.
 
 ### CDK Usage
 
@@ -84,33 +73,22 @@ that exist for the dev environment.
 foo@bar:~$ make cdk-ls app_env=dev
    ...
 StarterDevAppVpcStack
-StarterDevSimpleAsgAaaStack
 ```
 
 I can use the make target 'cdk-diff' and 'cdk-diff-all' to see if the project
-template would change the AWS deployed stack. Note that when I diff the
-SimpleAsg stack, CDK automatically figures out that it depends upon th AppVpc
-stack. It diffs both. 
+template would change the AWS deployed stack.
 
 If I run the 'cdk-diff-all' target, it diffs every stack in the environment
 
 ```console
-foo@bar:~$ make cdk-diff app_env=dev stack=StarterDevSimpleAsgAaaStack
+foo@bar:~$ make cdk-diff app_env=dev stack=StarterDevAppVpcStack
  ...
-Including dependency stacks: StarterDevAppVpcStack
 start: Building 69f29bc9ba86d9acc02d6e91ebe003b265184e8bd7238569531453e75854fbaa:709310380790-us-east-1
 success: Built 69f29bc9ba86d9acc02d6e91ebe003b265184e8bd7238569531453e75854fbaa:709310380790-us-east-1
 start: Publishing 69f29bc9ba86d9acc02d6e91ebe003b265184e8bd7238569531453e75854fbaa:709310380790-us-east-1
 success: Published 69f29bc9ba86d9acc02d6e91ebe003b265184e8bd7238569531453e75854fbaa:709310380790-us-east-1
 Hold on while we create a read-only change set to get a diff with accurate replacement information (use --no-change-set to use a less accurate but faster template-only diff)
 Stack StarterDevAppVpcStack
-There were no differences
-start: Building caaf085f9c46d956ec4fc0002e927e7e7febfff7413592436995dbeaa0b3d3de:709310380790-us-east-1
-success: Built caaf085f9c46d956ec4fc0002e927e7e7febfff7413592436995dbeaa0b3d3de:709310380790-us-east-1
-start: Publishing caaf085f9c46d956ec4fc0002e927e7e7febfff7413592436995dbeaa0b3d3de:709310380790-us-east-1
-success: Published caaf085f9c46d956ec4fc0002e927e7e7febfff7413592436995dbeaa0b3d3de:709310380790-us-east-1
-Hold on while we create a read-only change set to get a diff with accurate replacement information (use --no-change-set to use a less accurate but faster template-only diff)
-Stack StarterDevSimpleAsgAaaStack
 There were no differences
 
 ✨  Number of stacks with differences: 0
@@ -148,29 +126,11 @@ The environment-specific config files are maintained in the project repo:
 
 The data is often generated manually and is fairly static.  However, sometimes I
 need to store data from external sources and it's safer and easier to automate
-the process of updating parts of the configuration data.  I use the AMI_ID for
-the simple_asg stack as an example, just becuase the latest ECS optimized ami
-ID changes fairly often, so it's likely to force an update.
+the process of updating parts of the configuration data.
 
-To see it in action, set your AWS credentials and run:
-```console
-foo@bar:~$ make discover app_env=dev
- ...
-2025-01-21 08:36:31,544 - {__main__} - {config.discover:update_simple_asg:87} - INFO - updating simple_asg: dev - aaa
-```
-
-If you look in the git repository, you should see the file:
-config/dev/simple_asg/aaa/simple_asg.json change.  It starts as a simple map in
-JSON with a single key. The new version is fleshed out with all the default
-values for that dataclass AND a new value for the key: ami_id
-
-The discovery process can be run manually, if you want to carefully manage the
-config data changes. Just run the discovery manually and commit the changes to
-the repo. The pipeline that runs your CDK commands will just read the
-configuration data.  Alternatively, if you don't care about the changes, but
-you want the convenience of always using the latest discovered data -  and
-perhaps just checking the impact using CDK diff - run the discovery in the
-pipeline that runs your CDK commands.
+The discovery process can be extended to automate configuration data updates.
+Run discovery manually and commit the changes to the repo, or run it in your
+pipeline before CDK commands to always use the latest discovered data.
 
 
 

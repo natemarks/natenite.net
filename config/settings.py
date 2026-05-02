@@ -91,24 +91,6 @@ class EnvironmentSetting(JsonSettingBase):
         return self.app_env.capitalize()
 
 
-@dataclass(frozen=False, kw_only=True)
-class SimpleAsgSetting(JsonSettingBase):
-    """Settings for each SimpleAsg stack instance.
-
-    This dataclass is intentionally mutable because discovery workflows may
-    update fields such as `ami_id` before deployment.
-    """
-
-    RELATIVE_PATH_TEMPLATE: ClassVar[str] = "simple_asg/{0}/simple_asg.json"
-
-    ami_id: str
-    instance_type: str = "t3.micro"
-    max_instances: int = 1
-    min_instances: int = 1
-    root_block_device_name: str = "/dev/xvda"
-    root_block_device_size: int = 100  # in GB
-
-
 @dataclass(frozen=True, kw_only=True)
 class AppVpcSetting(JsonSettingBase):
     """Settings for the AppVpc stack template.

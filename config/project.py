@@ -95,18 +95,10 @@ SUPPORTED_APP_ENVS = _require_string_list(_DEFAULTS, "supported_app_envs")
 APP_ENV_TO_AWS_ACCOUNT = _require_string_map(
     _DEFAULTS, "app_env_to_aws_account"
 )
-SIMPLE_ASG_IDS_BY_ENV = _require_string_list_map(
-    _DEFAULTS, "simple_asg_ids_by_env"
-)
 
 for app_env in SUPPORTED_APP_ENVS:
     if app_env not in APP_ENV_TO_AWS_ACCOUNT:
         raise RuntimeError(
             "Missing account mapping for environment "
-            f"{app_env} in {DEFAULTS_PATH}"
-        )
-    if app_env not in SIMPLE_ASG_IDS_BY_ENV:
-        raise RuntimeError(
-            "Missing SimpleAsg rollout ids for environment "
             f"{app_env} in {DEFAULTS_PATH}"
         )

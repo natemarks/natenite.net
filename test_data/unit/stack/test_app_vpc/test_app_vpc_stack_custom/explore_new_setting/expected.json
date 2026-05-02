@@ -1,6 +1,6 @@
 {
   "Resources": {
-    "StarterDevAppVpcAppVpcF9E8D586": {
+    "NateNiteDevAppVpcAppVpc39E32984": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
         "CidrBlock": "10.37.0.0/16",
@@ -10,12 +10,12 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ]
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1Subnet0DEB4C02": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1Subnet1C115777": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "AvailabilityZone": {
@@ -31,7 +31,7 @@
         "Tags": [
           {
             "Key": "aws-cdk:subnet-name",
-            "Value": "starter-dev-app-vpc_public"
+            "Value": "natenite-dev-app-vpc_public"
           },
           {
             "Key": "aws-cdk:subnet-type",
@@ -39,91 +39,91 @@
           },
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet1"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1RouteTable980C7F85": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1RouteTable807F7293": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet1"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1RouteTableAssociationED83B74A": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1RouteTableAssociationCC88B509": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1RouteTable980C7F85"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1RouteTable807F7293"
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1Subnet0DEB4C02"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1Subnet1C115777"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1DefaultRoute5C5BA4C7": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1DefaultRoute939C2A58": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "DestinationCidrBlock": "0.0.0.0/0",
         "GatewayId": {
-          "Ref": "StarterDevAppVpcAppVpcIGWCD30F8FB"
+          "Ref": "NateNiteDevAppVpcAppVpcIGW5E1BF9F5"
         },
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1RouteTable980C7F85"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1RouteTable807F7293"
         }
       },
       "DependsOn": [
-        "StarterDevAppVpcAppVpcVPCGW176A9610"
+        "NateNiteDevAppVpcAppVpcVPCGW46B849A8"
       ]
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1EIP7096E9D0": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1EIP8BD7A805": {
       "Type": "AWS::EC2::EIP",
       "Properties": {
         "Domain": "vpc",
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet1"
           }
         ]
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1NATGateway899723C9": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1NATGatewayF03368F3": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
           "Fn::GetAtt": [
-            "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1EIP7096E9D0",
+            "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1EIP8BD7A805",
             "AllocationId"
           ]
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1Subnet0DEB4C02"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1Subnet1C115777"
         },
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet1"
           }
         ]
       },
       "DependsOn": [
-        "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1DefaultRoute5C5BA4C7",
-        "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1RouteTableAssociationED83B74A"
+        "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1DefaultRoute939C2A58",
+        "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1RouteTableAssociationCC88B509"
       ]
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2Subnet82BBAFD1": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2Subnet0097B231": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "AvailabilityZone": {
@@ -139,7 +139,7 @@
         "Tags": [
           {
             "Key": "aws-cdk:subnet-name",
-            "Value": "starter-dev-app-vpc_public"
+            "Value": "natenite-dev-app-vpc_public"
           },
           {
             "Key": "aws-cdk:subnet-type",
@@ -147,91 +147,91 @@
           },
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet2"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2RouteTable49B2227D": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2RouteTable217D4155": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet2"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2RouteTableAssociation698D3F3C": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2RouteTableAssociation2219DE93": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2RouteTable49B2227D"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2RouteTable217D4155"
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2Subnet82BBAFD1"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2Subnet0097B231"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2DefaultRoute6390C68E": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2DefaultRoute91B0A9F5": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "DestinationCidrBlock": "0.0.0.0/0",
         "GatewayId": {
-          "Ref": "StarterDevAppVpcAppVpcIGWCD30F8FB"
+          "Ref": "NateNiteDevAppVpcAppVpcIGW5E1BF9F5"
         },
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2RouteTable49B2227D"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2RouteTable217D4155"
         }
       },
       "DependsOn": [
-        "StarterDevAppVpcAppVpcVPCGW176A9610"
+        "NateNiteDevAppVpcAppVpcVPCGW46B849A8"
       ]
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2EIPD5364DF1": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2EIPC5D9F8CC": {
       "Type": "AWS::EC2::EIP",
       "Properties": {
         "Domain": "vpc",
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet2"
           }
         ]
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2NATGateway1ACE0F3F": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2NATGateway7D16C587": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
           "Fn::GetAtt": [
-            "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2EIPD5364DF1",
+            "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2EIPC5D9F8CC",
             "AllocationId"
           ]
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2Subnet82BBAFD1"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2Subnet0097B231"
         },
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_publicSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_publicSubnet2"
           }
         ]
       },
       "DependsOn": [
-        "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2DefaultRoute6390C68E",
-        "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2RouteTableAssociation698D3F3C"
+        "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2DefaultRoute91B0A9F5",
+        "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2RouteTableAssociation2219DE93"
       ]
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "AvailabilityZone": {
@@ -247,7 +247,7 @@
         "Tags": [
           {
             "Key": "aws-cdk:subnet-name",
-            "Value": "starter-dev-app-vpc_private"
+            "Value": "natenite-dev-app-vpc_private"
           },
           {
             "Key": "aws-cdk:subnet-type",
@@ -255,52 +255,52 @@
           },
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_privateSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_privateSubnet1"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1RouteTable4781CDC3": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1RouteTableF4932697": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_privateSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_privateSubnet1"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1RouteTableAssociation34E46D35": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1RouteTableAssociation2BB15A46": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1RouteTable4781CDC3"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1RouteTableF4932697"
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1DefaultRouteCF5AC9B4": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1DefaultRoute3D00F70E": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "DestinationCidrBlock": "0.0.0.0/0",
         "NatGatewayId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet1NATGateway899723C9"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet1NATGatewayF03368F3"
         },
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1RouteTable4781CDC3"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1RouteTableF4932697"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "AvailabilityZone": {
@@ -316,7 +316,7 @@
         "Tags": [
           {
             "Key": "aws-cdk:subnet-name",
-            "Value": "starter-dev-app-vpc_private"
+            "Value": "natenite-dev-app-vpc_private"
           },
           {
             "Key": "aws-cdk:subnet-type",
@@ -324,52 +324,52 @@
           },
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_privateSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_privateSubnet2"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2RouteTableD9E81429": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2RouteTable168A6837": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_privateSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_privateSubnet2"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2RouteTableAssociationF77C6E4C": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2RouteTableAssociation6DBFB25C": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2RouteTableD9E81429"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2RouteTable168A6837"
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2DefaultRoute59C64DD1": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2DefaultRoute37626863": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "DestinationCidrBlock": "0.0.0.0/0",
         "NatGatewayId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcpublicSubnet2NATGateway1ACE0F3F"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcpublicSubnet2NATGateway7D16C587"
         },
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2RouteTableD9E81429"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2RouteTable168A6837"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet1Subnet0A59EFCE": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet1SubnetE37B31B8": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "AvailabilityZone": {
@@ -385,7 +385,7 @@
         "Tags": [
           {
             "Key": "aws-cdk:subnet-name",
-            "Value": "starter-dev-app-vpc_isolated"
+            "Value": "natenite-dev-app-vpc_isolated"
           },
           {
             "Key": "aws-cdk:subnet-type",
@@ -393,40 +393,40 @@
           },
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_isolatedSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_isolatedSubnet1"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet1RouteTableF0B6E9B8": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet1RouteTable3DE6B72A": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_isolatedSubnet1"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_isolatedSubnet1"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet1RouteTableAssociationCD794D66": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet1RouteTableAssociationF714E470": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet1RouteTableF0B6E9B8"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet1RouteTable3DE6B72A"
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet1Subnet0A59EFCE"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet1SubnetE37B31B8"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet2SubnetF452F775": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet2SubnetC0B6354C": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "AvailabilityZone": {
@@ -442,7 +442,7 @@
         "Tags": [
           {
             "Key": "aws-cdk:subnet-name",
-            "Value": "starter-dev-app-vpc_isolated"
+            "Value": "natenite-dev-app-vpc_isolated"
           },
           {
             "Key": "aws-cdk:subnet-type",
@@ -450,65 +450,65 @@
           },
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_isolatedSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_isolatedSubnet2"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet2RouteTableC82ABE3E": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet2RouteTable112F0189": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/starter-dev-app-vpc_isolatedSubnet2"
+            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/natenite-dev-app-vpc_isolatedSubnet2"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet2RouteTableAssociationBD4A6095": {
+    "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet2RouteTableAssociation9B921FBE": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet2RouteTableC82ABE3E"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet2RouteTable112F0189"
         },
         "SubnetId": {
-          "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcisolatedSubnet2SubnetF452F775"
+          "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcisolatedSubnet2SubnetC0B6354C"
         }
       }
     },
-    "StarterDevAppVpcAppVpcIGWCD30F8FB": {
+    "NateNiteDevAppVpcAppVpcIGW5E1BF9F5": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ]
       }
     },
-    "StarterDevAppVpcAppVpcVPCGW176A9610": {
+    "NateNiteDevAppVpcAppVpcVPCGW46B849A8": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
         "InternetGatewayId": {
-          "Ref": "StarterDevAppVpcAppVpcIGWCD30F8FB"
+          "Ref": "NateNiteDevAppVpcAppVpcIGW5E1BF9F5"
         },
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcEC2SecurityGroup9CF45D42": {
+    "NateNiteDevAppVpcAppVpcEC2SecurityGroup35C3199B": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/EC2/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/EC2/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -520,7 +520,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -531,7 +531,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -547,22 +547,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcEC23D16EBF9": {
+    "NateNiteDevAppVpcAppVpcEC2DDB60C7A": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcEC2SecurityGroup9CF45D42",
+              "NateNiteDevAppVpcAppVpcEC2SecurityGroup35C3199B",
               "GroupId"
             ]
           }
@@ -581,28 +581,28 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcEC2MESSAGESSecurityGroupAD0EF847": {
+    "NateNiteDevAppVpcAppVpcEC2MESSAGESSecurityGroupD30B6E47": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/EC2_MESSAGES/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/EC2_MESSAGES/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -614,7 +614,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -625,7 +625,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -641,22 +641,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcEC2MESSAGESA04E2863": {
+    "NateNiteDevAppVpcAppVpcEC2MESSAGES5BEDE68E": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcEC2MESSAGESSecurityGroupAD0EF847",
+              "NateNiteDevAppVpcAppVpcEC2MESSAGESSecurityGroupD30B6E47",
               "GroupId"
             ]
           }
@@ -675,28 +675,28 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcSSMSecurityGroup108208C4": {
+    "NateNiteDevAppVpcAppVpcSSMSecurityGroupB70D959D": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/SSM/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/SSM/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -708,7 +708,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -719,7 +719,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -735,22 +735,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcSSMFD294B86": {
+    "NateNiteDevAppVpcAppVpcSSM54DB1B75": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcSSMSecurityGroup108208C4",
+              "NateNiteDevAppVpcAppVpcSSMSecurityGroupB70D959D",
               "GroupId"
             ]
           }
@@ -769,28 +769,28 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcSSMMESSAGESSecurityGroup883D6F3E": {
+    "NateNiteDevAppVpcAppVpcSSMMESSAGESSecurityGroup1AF2EDDD": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/SSM_MESSAGES/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/SSM_MESSAGES/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -802,7 +802,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -813,7 +813,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -829,22 +829,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcSSMMESSAGESD1BBD74F": {
+    "NateNiteDevAppVpcAppVpcSSMMESSAGES9DBD84D8": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcSSMMESSAGESSecurityGroup883D6F3E",
+              "NateNiteDevAppVpcAppVpcSSMMESSAGESSecurityGroup1AF2EDDD",
               "GroupId"
             ]
           }
@@ -863,28 +863,28 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcSECRETSMANAGERSecurityGroupED663B5A": {
+    "NateNiteDevAppVpcAppVpcSECRETSMANAGERSecurityGroup40173E4C": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/SECRETS_MANAGER/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/SECRETS_MANAGER/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -896,7 +896,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -907,7 +907,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -923,22 +923,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcSECRETSMANAGER7F4C170B": {
+    "NateNiteDevAppVpcAppVpcSECRETSMANAGER90AE273C": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcSECRETSMANAGERSecurityGroupED663B5A",
+              "NateNiteDevAppVpcAppVpcSECRETSMANAGERSecurityGroup40173E4C",
               "GroupId"
             ]
           }
@@ -957,28 +957,28 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcECSAGENTSecurityGroup08DE64C4": {
+    "NateNiteDevAppVpcAppVpcECSAGENTSecurityGroupDA82B48F": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/ECS_AGENT/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/ECS_AGENT/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -990,7 +990,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -1001,7 +1001,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -1017,22 +1017,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcECSAGENTA6C5852F": {
+    "NateNiteDevAppVpcAppVpcECSAGENTFCB7B5A4": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcECSAGENTSecurityGroup08DE64C4",
+              "NateNiteDevAppVpcAppVpcECSAGENTSecurityGroupDA82B48F",
               "GroupId"
             ]
           }
@@ -1051,28 +1051,28 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcECSSecurityGroup3B7CC02B": {
+    "NateNiteDevAppVpcAppVpcECSSecurityGroup0D19E6DB": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/ECS/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/ECS/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -1084,7 +1084,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -1095,7 +1095,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -1111,22 +1111,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcECSA2292102": {
+    "NateNiteDevAppVpcAppVpcECS4564BF89": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcECSSecurityGroup3B7CC02B",
+              "NateNiteDevAppVpcAppVpcECSSecurityGroup0D19E6DB",
               "GroupId"
             ]
           }
@@ -1145,28 +1145,28 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcECSTELEMETRYSecurityGroup6A041C98": {
+    "NateNiteDevAppVpcAppVpcECSTELEMETRYSecurityGroup4956BD33": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "StarterDevAppVpcStack/StarterDevAppVpcAppVpc/ECS_TELEMETRY/SecurityGroup",
+        "GroupDescription": "NateNiteDevAppVpcStack/NateNiteDevAppVpcAppVpc/ECS_TELEMETRY/SecurityGroup",
         "SecurityGroupEgress": [
           {
             "CidrIp": "0.0.0.0/0",
@@ -1178,7 +1178,7 @@
           {
             "CidrIp": {
               "Fn::GetAtt": [
-                "StarterDevAppVpcAppVpcF9E8D586",
+                "NateNiteDevAppVpcAppVpc39E32984",
                 "CidrBlock"
               ]
             },
@@ -1189,7 +1189,7 @@
                   "from ",
                   {
                     "Fn::GetAtt": [
-                      "StarterDevAppVpcAppVpcF9E8D586",
+                      "NateNiteDevAppVpcAppVpc39E32984",
                       "CidrBlock"
                     ]
                   },
@@ -1205,22 +1205,22 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcAppVpcECSTELEMETRY1C0062A9": {
+    "NateNiteDevAppVpcAppVpcECSTELEMETRY3EAAE1E9": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "PrivateDnsEnabled": true,
         "SecurityGroupIds": [
           {
             "Fn::GetAtt": [
-              "StarterDevAppVpcAppVpcECSTELEMETRYSecurityGroup6A041C98",
+              "NateNiteDevAppVpcAppVpcECSTELEMETRYSecurityGroup4956BD33",
               "GroupId"
             ]
           }
@@ -1239,32 +1239,32 @@
         },
         "SubnetIds": [
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet1SubnetE4B6C551"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet1SubnetD21FE45E"
           },
           {
-            "Ref": "StarterDevAppVpcAppVpcstarterdevappvpcprivateSubnet2Subnet7075399A"
+            "Ref": "NateNiteDevAppVpcAppVpcnatenitedevappvpcprivateSubnet2Subnet74DDB3F6"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "starter-dev-app-vpc"
+            "Value": "natenite-dev-app-vpc"
           }
         ],
         "VpcEndpointType": "Interface",
         "VpcId": {
-          "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+          "Ref": "NateNiteDevAppVpcAppVpc39E32984"
         }
       }
     },
-    "StarterDevAppVpcPrivateR53ZoneF886FFFE": {
+    "NateNiteDevAppVpcPrivateR53Zone1BE3982A": {
       "Type": "AWS::Route53::HostedZone",
       "Properties": {
         "Name": "dev.internal.dev.daisy.com.",
         "VPCs": [
           {
             "VPCId": {
-              "Ref": "StarterDevAppVpcAppVpcF9E8D586"
+              "Ref": "NateNiteDevAppVpcAppVpc39E32984"
             },
             "VPCRegion": {
               "Ref": "AWS::Region"

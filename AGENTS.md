@@ -74,13 +74,7 @@ python3 -m pytest -v tests/unit/stack/test_app_vpc.py::test_app_vpc_stack_actual
 Single parametrized case by ID:
 ```bash
 source .venv/bin/activate
-python3 -m pytest -v tests/unit/stack/test_simple_asg.py::test_simple_asg_stack_actual[dev]
-```
-
-Single test with marker + golden update:
-```bash
-source .venv/bin/activate
-python3 -m pytest -v -m unit tests/unit/stack/test_simple_asg.py::test_simple_asg_stack_custom --update_golden
+python3 -m pytest -v tests/unit/stack/test_app_vpc.py::test_app_vpc_stack_actual[dev]
 ```
 
 ## CDK and Discovery Commands
@@ -151,7 +145,7 @@ Derived from existing code and enforced tooling.
 - Build stack inputs via `from_config_directory` constructors.
 - Keep per-environment config under `config/<env>/...`.
 - Preserve prefix/naming scheme based on `APP_NAME` + environment.
-- Keep stack dependencies explicit (SimpleAsg depends on AppVpc).
+- Keep stack dependencies explicit when adding new stacks.
 
 ## Agent Working Agreement
 - Make minimal, focused diffs.
