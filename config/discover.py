@@ -17,6 +17,8 @@ Customize:
 - Replace file persistence with another backend if needed.
 """
 
+# pylint: disable=too-few-public-methods
+
 import argparse
 
 from config.helper import (

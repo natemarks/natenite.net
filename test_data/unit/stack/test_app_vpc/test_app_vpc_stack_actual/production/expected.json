@@ -1272,36 +1272,6 @@
           }
         ]
       }
-    },
-    "NateNiteProductionAppVpcPublicR53ZoneD128E5FE": {
-      "Type": "AWS::Route53::HostedZone",
-      "Properties": {
-        "Name": "natenite.net."
-      }
-    },
-    "NateNiteProductionAppVpcCertificate012F2DD0": {
-      "Type": "AWS::CertificateManager::Certificate",
-      "Properties": {
-        "DomainName": "natenite.net",
-        "DomainValidationOptions": [
-          {
-            "DomainName": "natenite.net",
-            "HostedZoneId": {
-              "Ref": "NateNiteProductionAppVpcPublicR53ZoneD128E5FE"
-            }
-          }
-        ],
-        "SubjectAlternativeNames": [
-          "*.natenite.net"
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "NateNiteProductionAppVpcStack/NateNiteProductionAppVpcCertificate"
-          }
-        ],
-        "ValidationMethod": "DNS"
-      }
     }
   },
   "Parameters": {

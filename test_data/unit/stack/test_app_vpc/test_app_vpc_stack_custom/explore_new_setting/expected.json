@@ -1272,36 +1272,6 @@
           }
         ]
       }
-    },
-    "NateNiteDevAppVpcPublicR53ZoneC8817E0C": {
-      "Type": "AWS::Route53::HostedZone",
-      "Properties": {
-        "Name": "dev.daisy.com."
-      }
-    },
-    "NateNiteDevAppVpcCertificate8854CF35": {
-      "Type": "AWS::CertificateManager::Certificate",
-      "Properties": {
-        "DomainName": "dev.daisy.com",
-        "DomainValidationOptions": [
-          {
-            "DomainName": "dev.daisy.com",
-            "HostedZoneId": {
-              "Ref": "NateNiteDevAppVpcPublicR53ZoneC8817E0C"
-            }
-          }
-        ],
-        "SubjectAlternativeNames": [
-          "*.dev.daisy.com"
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "NateNiteDevAppVpcStack/NateNiteDevAppVpcCertificate"
-          }
-        ],
-        "ValidationMethod": "DNS"
-      }
     }
   },
   "Parameters": {
