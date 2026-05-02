@@ -1,25 +1,10 @@
 {
-  "app_name": "Starter",
-  "iac_project_url": "github.com/natemarks/cdk-starter",
+  "app_name": "NateNite",
+  "iac_project_url": "github.com/natemarks/natenate.net",
   "supported_app_envs": [
-    "dev",
-    "staging",
     "production"
   ],
   "app_env_to_aws_account": {
-    "dev": "709310380790",
-    "staging": "709310380790",
-    "production": "709310380790"
-  },
-  "simple_asg_ids_by_env": {
-    "dev": [
-      "aaa"
-    ],
-    "staging": [
-      "bbb"
-    ],
-    "production": [
-      "ccc"
-    ]
+    "production": "605560722292"
   }
 }
