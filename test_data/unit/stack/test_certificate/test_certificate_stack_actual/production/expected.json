@@ -1,0 +1,68 @@
+{
+  "Resources": {
+    "NateNiteProductionCertificatePublicR53Zone10D324AD": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": "natenite.net."
+      }
+    },
+    "NateNiteProductionCertificateCertificate2B044304": {
+      "Type": "AWS::CertificateManager::Certificate",
+      "Properties": {
+        "DomainName": "natenite.net",
+        "DomainValidationOptions": [
+          {
+            "DomainName": "natenite.net",
+            "HostedZoneId": {
+              "Ref": "NateNiteProductionCertificatePublicR53Zone10D324AD"
+            }
+          }
+        ],
+        "SubjectAlternativeNames": [
+          "*.natenite.net"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "NateNiteProductionCertificateStack/NateNiteProductionCertificateCertificate"
+          }
+        ],
+        "ValidationMethod": "DNS"
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}

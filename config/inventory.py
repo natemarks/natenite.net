@@ -21,7 +21,7 @@ from aws_cdk import App, Environment, Tags
 
 from config.settings import EnvironmentSetting, get_actual_path
 from config.helper import check_aws_account, check_app_env
-from stack.app_vpc import AppVpcInput, AppVpcStack
+from stack.certificate import CertificateInput, CertificateStack
 
 
 class Inventory:
@@ -38,14 +38,14 @@ class Inventory:
         check_aws_account(app_env)
         self.data_path = get_actual_path(app_env)
         self.app_env = app_env
-        self.unique_stacks: dict[str, AppVpcStack] = {}
+        self.unique_stacks: dict[str, CertificateStack] = {}
         self.environment_setting = EnvironmentSetting.from_data_path(
             self.data_path
         )
 
     def deploy_stacks(self, app: App, cdk_env: Environment):
         """Deploy stacks for this environment."""
-        self.app_vpc_stack(
+        self.certificate_stack(
             app,
             cdk_env,
             termination_protection=self.TERMINATION_PROTECTION,
@@ -57,18 +57,18 @@ class Inventory:
         Tags.of(app).add("app_env", self.app_env)
         Tags.of(app).add("Environment", self.app_env)
 
-    def app_vpc_stack(
+    def certificate_stack(
         self, app: App, cdk_env: Environment, termination_protection: bool
-    ) -> AppVpcStack:
-        """Create and register the single AppVpc stack for this env."""
-        s_input = AppVpcInput.from_config_directory(self.data_path)
-        self.unique_stacks["app_vpc"] = AppVpcStack(
+    ) -> CertificateStack:
+        """Create and register the single Certificate stack for this env."""
+        s_input = CertificateInput.from_config_directory(self.data_path)
+        self.unique_stacks["certificate"] = CertificateStack(
             scope=app,
             cdk_env=cdk_env,
             s_input=s_input,
             termination_protection=termination_protection,
         )
-        return self.unique_stacks["app_vpc"]
+        return self.unique_stacks["certificate"]
 
 
 class DevInventory(Inventory):
