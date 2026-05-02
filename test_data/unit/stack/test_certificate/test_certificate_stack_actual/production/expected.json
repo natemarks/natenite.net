@@ -1,11 +1,5 @@
 {
   "Resources": {
-    "NateNiteProductionCertificatePublicR53Zone10D324AD": {
-      "Type": "AWS::Route53::HostedZone",
-      "Properties": {
-        "Name": "natenite.net."
-      }
-    },
     "NateNiteProductionCertificateCertificate2B044304": {
       "Type": "AWS::CertificateManager::Certificate",
       "Properties": {
@@ -13,12 +7,15 @@
         "DomainValidationOptions": [
           {
             "DomainName": "natenite.net",
-            "HostedZoneId": {
-              "Ref": "NateNiteProductionCertificatePublicR53Zone10D324AD"
-            }
+            "HostedZoneId": "DUMMY"
+          },
+          {
+            "DomainName": "www.natenite.net",
+            "HostedZoneId": "DUMMY"
           }
         ],
         "SubjectAlternativeNames": [
+          "www.natenite.net",
           "*.natenite.net"
         ],
         "Tags": [

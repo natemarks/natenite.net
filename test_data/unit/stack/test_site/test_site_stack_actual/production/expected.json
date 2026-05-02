@@ -80,42 +80,44 @@
               ]
             },
             {
-              "Action": [
-                "s3:GetObject*",
-                "s3:GetBucket*",
-                "s3:List*"
-              ],
-              "Effect": "Allow",
-              "Principal": {
-                "CanonicalUser": {
-                  "Fn::GetAtt": [
-                    "NateNiteProductionSiteOAI3A250576",
-                    "S3CanonicalUserId"
-                  ]
+              "Action": "s3:GetObject",
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition"
+                        },
+                        ":cloudfront::605560722292:distribution/",
+                        {
+                          "Ref": "NateNiteProductionSiteDistribution7AE30513"
+                        }
+                      ]
+                    ]
+                  }
                 }
               },
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "NateNiteProductionSiteBucket21B83B9D",
-                    "Arn"
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "NateNiteProductionSiteBucket21B83B9D",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
                   ]
-                },
-                {
-                  "Fn::Join": [
-                    "",
-                    [
-                      {
-                        "Fn::GetAtt": [
-                          "NateNiteProductionSiteBucket21B83B9D",
-                          "Arn"
-                        ]
-                      },
-                      "/*"
-                    ]
-                  ]
-                }
-              ]
+                ]
+              }
             }
           ],
           "Version": "2012-10-17"
@@ -167,9 +169,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "Code": {
-          "S3Bucket": {
-            "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
-          },
+          "S3Bucket": "cdk-hnb659fds-assets-605560722292-us-east-1",
           "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
         },
         "Timeout": 900,
@@ -268,7 +268,8 @@
       "Properties": {
         "DistributionConfig": {
           "Aliases": [
-            "natenite.net"
+            "natenite.net",
+            "www.natenite.net"
           ],
           "CustomErrorResponses": [
             {
@@ -332,12 +333,64 @@
         }
       }
     },
-    "NateNiteProductionSiteOAI3A250576": {
-      "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+    "NateNiteProductionSiteApexRecord5715BE56": {
+      "Type": "AWS::Route53::RecordSet",
       "Properties": {
-        "CloudFrontOriginAccessIdentityConfig": {
-          "Comment": "Allows CloudFront to reach the bucket"
-        }
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "NateNiteProductionSiteDistribution7AE30513",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": {
+            "Fn::FindInMap": [
+              "AWSCloudFrontPartitionHostedZoneIdMap",
+              {
+                "Ref": "AWS::Partition"
+              },
+              "zoneId"
+            ]
+          }
+        },
+        "HostedZoneId": "DUMMY",
+        "Name": "natenite.net.",
+        "Type": "A"
+      }
+    },
+    "NateNiteProductionSiteWwwRecord18A71E51": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "NateNiteProductionSiteDistribution7AE30513",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": {
+            "Fn::FindInMap": [
+              "AWSCloudFrontPartitionHostedZoneIdMap",
+              {
+                "Ref": "AWS::Partition"
+              },
+              "zoneId"
+            ]
+          }
+        },
+        "HostedZoneId": "DUMMY",
+        "Name": "www.natenite.net.",
+        "Type": "A"
+      }
+    }
+  },
+  "Mappings": {
+    "AWSCloudFrontPartitionHostedZoneIdMap": {
+      "aws": {
+        "zoneId": "Z2FDTNDATAQYW2"
+      },
+      "aws-cn": {
+        "zoneId": "Z3RFFRIM2A3IF5"
       }
     }
   },

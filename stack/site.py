@@ -23,6 +23,9 @@ from aws_cdk import (
     RemovalPolicy,
     Duration,
     aws_cloudfront as cloudfront,
+    aws_iam as iam,
+    aws_route53 as r53,
+    aws_route53_targets as targets,
     aws_s3 as s3,
     aws_wafv2 as wafv2,
 )
@@ -181,7 +184,10 @@ class SiteStack(Stack):
                     cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN
                 ),
             ),
-            domain_names=[self.s_input.env_setting.default_fqdn],
+            domain_names=[
+                self.s_input.env_setting.default_fqdn,
+                f"www.{self.s_input.env_setting.default_fqdn}",
+            ],
             certificate=certificate_stack.certificate,
             default_root_object="index.html",
             error_responses=[
@@ -202,14 +208,6 @@ class SiteStack(Stack):
             web_acl_id=self.web_acl.attr_arn,
         )
 
-        # Grant CloudFront OAC access to S3 bucket
-        self.site_bucket.grant_read(
-            cloudfront.OriginAccessIdentity(
-                self,
-                f"{self._prefix}OAI",
-            )
-        )
-
         # Update CloudFront distribution to use OAC
         cfn_distribution = self.distribution.node.default_child
         oac_path = "DistributionConfig.Origins.0.OriginAccessControlId"
@@ -224,4 +222,46 @@ class SiteStack(Stack):
         cfn_distribution.add_property_override(
             oai_path,
             "",
+        )
+
+        # Grant CloudFront OAC access to S3 bucket via bucket policy
+        # OAC uses a service principal, not an identity ARN
+        self.site_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
+                actions=["s3:GetObject"],
+                resources=[self.site_bucket.arn_for_objects("*")],
+                conditions={
+                    "StringEquals": {
+                        "AWS:SourceArn": Stack.of(self).format_arn(
+                            service="cloudfront",
+                            resource="distribution",
+                            region="",
+                            resource_name=self.distribution.distribution_id,
+                        )
+                    }
+                },
+            )
+        )
+
+        # Create Route53 A records for apex and www pointing to CloudFront
+        r53.ARecord(
+            self,
+            f"{self._prefix}ApexRecord",
+            zone=certificate_stack.public_r53_zone,
+            record_name=self.s_input.env_setting.default_fqdn,
+            target=r53.RecordTarget.from_alias(
+                targets.CloudFrontTarget(self.distribution)
+            ),
+        )
+
+        r53.ARecord(
+            self,
+            f"{self._prefix}WwwRecord",
+            zone=certificate_stack.public_r53_zone,
+            record_name=f"www.{self.s_input.env_setting.default_fqdn}",
+            target=r53.RecordTarget.from_alias(
+                targets.CloudFrontTarget(self.distribution)
+            ),
         )

@@ -13,6 +13,7 @@ Customize:
 import pytest
 from aws_cdk import App, assertions, Environment
 from config.settings import get_actual_path
+from config.project import APP_ENV_TO_AWS_ACCOUNT
 from stack.certificate import CertificateStack, CertificateInput
 from tests.helper import case_data_path, write_case_json, read_case_json
 
@@ -34,9 +35,15 @@ def test_certificate_stack_actual(request, environment, update_golden):
 
     app = App()
 
+    # Use actual account for from_lookup to work
+    cdk_env = Environment(
+        account=APP_ENV_TO_AWS_ACCOUNT[environment],
+        region="us-east-1",
+    )
+
     stk = CertificateStack(
         scope=app,
-        cdk_env=Environment(),
+        cdk_env=cdk_env,
         s_input=s_input,
     )
     template = assertions.Template.from_stack(stk)

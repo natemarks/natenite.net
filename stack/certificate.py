@@ -64,17 +64,20 @@ class CertificateStack(Stack):
         super().__init__(
             scope=scope, id=f"{self._prefix}Stack", env=cdk_env, **kwargs
         )
-        self.public_r53_zone = r53.PublicHostedZone(
+        # Import existing hosted zone instead of creating a new one
+        self.public_r53_zone = r53.HostedZone.from_lookup(
             self,
             f"{self._prefix}PublicR53Zone",
-            zone_name=self.s_input.env_setting.default_fqdn,
+            domain_name=self.s_input.env_setting.default_fqdn,
         )
+        # Create certificate for apex domain with www subdomain
         self.certificate = acm.Certificate(
             self,
             f"{self._prefix}Certificate",
             domain_name=self.s_input.env_setting.default_fqdn,
             subject_alternative_names=[
-                f"*.{self.s_input.env_setting.default_fqdn}"
+                f"www.{self.s_input.env_setting.default_fqdn}",
+                f"*.{self.s_input.env_setting.default_fqdn}",
             ],
             validation=acm.CertificateValidation.from_dns(
                 self.public_r53_zone
