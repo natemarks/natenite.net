@@ -10,7 +10,7 @@ CDK := node_modules/.bin/cdk
 
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 DEFAULT_BRANCH := main
-app_env := dev
+app_env := production
 PYTHON_VERSION := 3.12.13
 CDK_VERSION := 2.70.0
 
