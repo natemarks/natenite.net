@@ -80,32 +80,6 @@
               ]
             },
             {
-              "Action": "s3:GetObject",
-              "Effect": "Allow",
-              "Principal": {
-                "CanonicalUser": {
-                  "Fn::GetAtt": [
-                    "NateNiteProductionSiteDistributionOrigin1S3OriginAA8C5AC4",
-                    "S3CanonicalUserId"
-                  ]
-                }
-              },
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "NateNiteProductionSiteBucket21B83B9D",
-                        "Arn"
-                      ]
-                    },
-                    "/*"
-                  ]
-                ]
-              }
-            },
-            {
               "Action": [
                 "s3:GetObject*",
                 "s3:GetBucket*",
@@ -286,14 +260,6 @@
           "CloudWatchMetricsEnabled": true,
           "MetricName": "NateNiteProductionSiteWebACL",
           "SampledRequestsEnabled": true
-        }
-      }
-    },
-    "NateNiteProductionSiteDistributionOrigin1S3OriginAA8C5AC4": {
-      "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
-      "Properties": {
-        "CloudFrontOriginAccessIdentityConfig": {
-          "Comment": "Identity for NateNiteProductionSiteStackNateNiteProductionSiteDistributionOrigin151815E13"
         }
       }
     },

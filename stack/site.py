@@ -23,10 +23,10 @@ from aws_cdk import (
     RemovalPolicy,
     Duration,
     aws_cloudfront as cloudfront,
-    aws_cloudfront_origins as origins,
     aws_s3 as s3,
     aws_wafv2 as wafv2,
 )
+from aws_cdk.aws_cloudfront_origins import S3BucketOrigin
 from aws_cdk import Environment as cdk_environment
 from constructs import Construct
 from config.helper import APP_NAME
@@ -174,7 +174,7 @@ class SiteStack(Stack):
             self,
             f"{self._prefix}Distribution",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3Origin(self.site_bucket),
+                origin=S3BucketOrigin(self.site_bucket),
                 viewer_protocol_policy=viewer_protocol,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 origin_request_policy=(
