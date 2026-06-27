@@ -263,6 +263,18 @@
         }
       }
     },
+    "NateNiteProductionSiteUrlRewriteFunction8648BE8F": {
+      "Type": "AWS::CloudFront::Function",
+      "Properties": {
+        "AutoPublish": true,
+        "FunctionCode": "\nfunction handler(event) {\n    var request = event.request;\n    var uri = request.uri;\n\n    // Check if URI ends with '/'\n    if (uri.endsWith('/')) {\n        request.uri += 'index.html';\n    }\n    // Check if URI has no extension (no dot in the last segment)\n    else if (!uri.includes('.')) {\n        request.uri += '/index.html';\n    }\n\n    return request;\n}\n            ",
+        "FunctionConfig": {
+          "Comment": "Rewrite directory requests to append index.html",
+          "Runtime": "cloudfront-js-1.0"
+        },
+        "Name": "us-east-1NateNiteProductilRewriteFunctionC2258315"
+      }
+    },
     "NateNiteProductionSiteDistribution7AE30513": {
       "Type": "AWS::CloudFront::Distribution",
       "Properties": {
@@ -288,6 +300,17 @@
           "DefaultCacheBehavior": {
             "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
             "Compress": true,
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "NateNiteProductionSiteUrlRewriteFunction8648BE8F",
+                    "FunctionARN"
+                  ]
+                }
+              }
+            ],
             "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf",
             "TargetOriginId": "NateNiteProductionSiteStackNateNiteProductionSiteDistributionOrigin151815E13",
             "ViewerProtocolPolicy": "redirect-to-https"

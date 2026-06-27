@@ -171,6 +171,31 @@ class SiteStack(Stack):
             ],
         )
 
+        # Create CloudFront Function to rewrite directory URLs to index.html
+        # This handles /services/ -> /services/index.html
+        url_rewrite_function = cloudfront.Function(
+            self,
+            f"{self._prefix}UrlRewriteFunction",
+            code=cloudfront.FunctionCode.from_inline("""
+function handler(event) {
+    var request = event.request;
+    var uri = request.uri;
+
+    // Check if URI ends with '/'
+    if (uri.endsWith('/')) {
+        request.uri += 'index.html';
+    }
+    // Check if URI has no extension (no dot in the last segment)
+    else if (!uri.includes('.')) {
+        request.uri += '/index.html';
+    }
+
+    return request;
+}
+            """),
+            comment="Rewrite directory requests to append index.html",
+        )
+
         # Create CloudFront distribution
         viewer_protocol = cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
         self.distribution = cloudfront.Distribution(
@@ -183,6 +208,12 @@ class SiteStack(Stack):
                 origin_request_policy=(
                     cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN
                 ),
+                function_associations=[
+                    cloudfront.FunctionAssociation(
+                        function=url_rewrite_function,
+                        event_type=cloudfront.FunctionEventType.VIEWER_REQUEST,
+                    )
+                ],
             ),
             domain_names=[
                 self.s_input.env_setting.default_fqdn,

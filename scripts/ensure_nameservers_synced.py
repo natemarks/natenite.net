@@ -35,6 +35,7 @@ Requirements:
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -50,6 +51,7 @@ RED = "\033[91m"
 BLUE = "\033[94m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
+
 
 def print_header(text: str):
     """Print a formatted header."""
@@ -98,7 +100,9 @@ def get_domain_from_config(environment: str) -> str:
         ValueError: If config is invalid or missing domain
     """
     script_dir = Path(__file__).parent
-    config_path = script_dir.parent / "config" / environment / "environment.json"
+    config_path = (
+        script_dir.parent / "config" / environment / "environment.json"
+    )
 
     if not config_path.exists():
         raise FileNotFoundError(
@@ -156,9 +160,7 @@ def find_registrar_hosted_zone(
                 comment = zone_config.get("Comment", "")
 
                 if comment == "HostedZone created by Route53 Registrar":
-                    nameservers = zone_response["DelegationSet"][
-                        "NameServers"
-                    ]
+                    nameservers = zone_response["DelegationSet"]["NameServers"]
                     return zone_id, domain_name, nameservers
 
     # If we get here, no matching zone was found
@@ -221,7 +223,9 @@ def wait_for_operation(
     dots = 0
 
     while time.time() - start_time < timeout:
-        response = domains_client.get_operation_detail(OperationId=operation_id)
+        response = domains_client.get_operation_detail(
+            OperationId=operation_id
+        )
         status = response["Status"]
 
         if status == "SUCCESSFUL":
@@ -251,7 +255,6 @@ def wait_for_operation(
 
 def check_dns_propagation(domain_name: str, expected_ns: List[str]) -> bool:
     """Check if DNS has propagated by querying public DNS servers."""
-    import subprocess
 
     print_section("Checking DNS Propagation")
 
@@ -276,7 +279,9 @@ def check_dns_propagation(domain_name: str, expected_ns: List[str]) -> bool:
             )
             if result.returncode == 0:
                 actual_ns = set(
-                    line.rstrip(".") for line in result.stdout.strip().split("\n") if line
+                    line.rstrip(".")
+                    for line in result.stdout.strip().split("\n")
+                    if line
                 )
                 if actual_ns == expected_set:
                     print_success(f"{name} ({server}): Propagated")
@@ -293,7 +298,7 @@ def check_dns_propagation(domain_name: str, expected_ns: List[str]) -> bool:
     return all_match
 
 
-def main():  # pylint: disable=too-many-statements,too-many-branches,too-many-locals
+def main():  # pylint: disable=too-many-statements,too-many-branches,too-many-locals,too-many-return-statements
     """Main function."""
     parser = argparse.ArgumentParser(
         description="Ensure Route53 hosted zone and domain registrar name servers match",
@@ -380,7 +385,9 @@ Examples:
                 f"The domain '{domain_name}' is registered with an "
                 "external registrar."
             )
-            print("\nYou must manually configure these name servers at your registrar:")
+            print(
+                "\nYou must manually configure these name servers at your registrar:"
+            )
             for ns in sorted(hz_nameservers):
                 print(f"  • {ns}")
             print("\nSee DOMAIN_AUTOMATION.md for detailed instructions.")
@@ -390,7 +397,9 @@ Examples:
 
         # Step 4: Get domain name servers
         print_section("Step 4: Getting Domain Registrar Name Servers")
-        domain_nameservers = get_domain_nameservers(domains_client, domain_name)
+        domain_nameservers = get_domain_nameservers(
+            domains_client, domain_name
+        )
         print_success("Domain Registrar Name Servers:")
         for ns in domain_nameservers:
             print(f"  • {ns}")
@@ -420,12 +429,16 @@ Examples:
         domain_set = set(domain_nameservers)
 
         if hz_set - domain_set:
-            print(f"{GREEN}Name servers in Hosted Zone but not in Domain:{RESET}")
+            print(
+                f"{GREEN}Name servers in Hosted Zone but not in Domain:{RESET}"
+            )
             for ns in sorted(hz_set - domain_set):
                 print(f"  + {ns}")
 
         if domain_set - hz_set:
-            print(f"{RED}Name servers in Domain but not in Hosted Zone:{RESET}")
+            print(
+                f"{RED}Name servers in Domain but not in Hosted Zone:{RESET}"
+            )
             for ns in sorted(domain_set - hz_set):
                 print(f"  - {ns}")
 
@@ -465,7 +478,9 @@ Examples:
             if nameservers_match(hz_nameservers, updated_ns):
                 print_success("Verification passed: Name servers now match!")
             else:
-                print_error("Verification failed: Name servers still don't match")
+                print_error(
+                    "Verification failed: Name servers still don't match"
+                )
                 return 1
 
         # Optionally check DNS propagation
@@ -490,7 +505,9 @@ Examples:
         print("Next steps:")
         print("  1. DNS propagation may take up to 48 hours")
         print("  2. ACM will automatically validate the certificate")
-        print("  3. Run verify_certificate_setup.sh to check certificate status")
+        print(
+            "  3. Run verify_certificate_setup.sh to check certificate status"
+        )
 
         return 0
 
