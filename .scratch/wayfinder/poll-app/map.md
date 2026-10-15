@@ -18,6 +18,7 @@ An **architecture decision**, with cited rationale, for hosting simple web polls
 
 <!-- one line per closed ticket: [title](tickets/file.md) — gist -->
 
+- [Grill: abuse limits](tickets/06-grill-abuse-limits.md) — WAF rate rule 20 POSTs per 5 min per IP on `/submit` (Block); Lambda reserved concurrency 2 (20 req/s, overruns monitorable via function URL metrics and `ConcurrentExecutions`); retry with backoff then friendly message; free text 500 chars, email 254, Lambda rejects bodies over 6 KB (shared ACL blocks over 8 KB)
 - [Decide: architecture](tickets/04-decide-architecture.md) — Lambda Function URL (IAM) behind CloudFront OAC on a second distribution (reusing the wildcard cert and the existing WAF ACL plus a rate rule); Python Lambda; one on-demand DynamoDB table (`RESPONSE#`/`EMAIL#` records, retained, deletion-protected); shared `index.html` driven by poll JSON; definitions bundled into the Lambda. Compute choice recorded as [ADR 0001](../../../docs/adr/0001-lambda-function-url-with-cloudfront-oac.md); terms in the repo-root `CONTEXT.md`
 - [Grill: poll definition and results access](tickets/03-grill-poll-definition.md) — email kept for manual use only (separate record, no TTL); owner-only script reads results; no results shown to respondents; JS acceptable; poll JSON in repo; single/multi/rating/free-text; ~100-5,000 responses per poll; soft dedupe with stored browser token; optional `closesAt`
 - [Research: container platform alternatives](tickets/05-research-container-platforms.md) — ECS Express/Fargate need an always-on ALB (~$29-36/mo floor, lower-trust prices), Lightsail is a fixed $7/mo; Lambda is <$0.01/mo; containers only tip for sustained traffic, long-lived processes or shared ALB
@@ -26,7 +27,6 @@ An **architecture decision**, with cited rationale, for hosting simple web polls
 
 ## Frontier (open, unblocked)
 
-- [Grill: abuse limits](tickets/06-grill-abuse-limits.md) (grilling, HITL)
 - [Grill: repo and deployment layout](tickets/07-grill-repo-deployment-layout.md) (grilling, HITL)
 
 ## Blocked
@@ -35,7 +35,7 @@ An **architecture decision**, with cited rationale, for hosting simple web polls
 
 ## Not yet specified
 
-- **Observability and cost guardrails:** alarms (throttles, Lambda errors, DynamoDB write failures) and a budget alert. Depends on the abuse limits and the deployment layout.
+- **Observability and cost guardrails:** which CloudWatch alarms to create and their thresholds (function URL 4xx/5xx and throttles, `ConcurrentExecutions` at the reservation of 2, Lambda errors, DynamoDB write failures, WAF blocks on the rate rule) and a budget alert. The metric evidence is in the closed abuse limits ticket; whether a function URL 429 increments `Url4xxCount` or `Throttles` still needs a test deploy. Depends on the deployment layout.
 - **Privacy notice:** wording of the one-line notice on the form and whether any regime applies to collecting an email (legal basis was not researched). Depends on nothing open, but it is launch content more than architecture; revisit when the destination is reached.
 
 ## Out of scope
