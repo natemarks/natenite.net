@@ -18,6 +18,7 @@ An **architecture decision**, with cited rationale, for hosting simple web polls
 
 <!-- one line per closed ticket: [title](tickets/file.md) — gist -->
 
+- [Grill: observability and cost guardrails](tickets/08-grill-observability-guardrails.md) — no alerting; raw CloudFront JSON logs to an S3 bucket in the stack (365-day expiry) with Athena table, workgroup and saved queries; handler writes structured JSON lines to CloudWatch Logs (365-day retention) with saved Logs Insights queries; filtering and normalization deferred to a later phase
 - [Grill: repo and deployment layout](tickets/07-grill-repo-deployment-layout.md) — everything in this repo, one CDK deploy; `polls/`, `lambda/submit/` (symlinked `polls`), `site/polls/`, `stack/polls.py` (`PollsInput`/`PollsStack`, `NateNiteProductionPollsStack`); asset hashes normalized in golden tests; fake-table handler tests plus a test validating every poll file; `make deploy-polls`/`diff-polls`; `PollsSetting` JSON for infrastructure numbers, `limits.py` for application limits; page logic tested with `node --test`
 - [Grill: abuse limits](tickets/06-grill-abuse-limits.md) — WAF rate rule 20 POSTs per 5 min per IP on `/submit` (Block); Lambda reserved concurrency 2 (20 req/s, overruns monitorable via function URL metrics and `ConcurrentExecutions`); retry with backoff then friendly message; free text 500 chars, email 254, Lambda rejects bodies over 6 KB (shared ACL blocks over 8 KB)
 - [Decide: architecture](tickets/04-decide-architecture.md) — Lambda Function URL (IAM) behind CloudFront OAC on a second distribution (reusing the wildcard cert and the existing WAF ACL plus a rate rule); Python Lambda; one on-demand DynamoDB table (`RESPONSE#`/`EMAIL#` records, retained, deletion-protected); shared `index.html` driven by poll JSON; definitions bundled into the Lambda. Compute choice recorded as [ADR 0001](../../../docs/adr/0001-lambda-function-url-with-cloudfront-oac.md); terms in the repo-root `CONTEXT.md`
@@ -28,7 +29,7 @@ An **architecture decision**, with cited rationale, for hosting simple web polls
 
 ## Frontier (open, unblocked)
 
-- [Grill: observability and cost guardrails](tickets/08-grill-observability-guardrails.md) (grilling, HITL)
+(none)
 
 ## Blocked
 
@@ -36,9 +37,11 @@ An **architecture decision**, with cited rationale, for hosting simple web polls
 
 ## Not yet specified
 
-- **Privacy notice:** wording of the one-line notice on the form and whether any regime applies to collecting an email (legal basis was not researched). Depends on nothing open, but it is launch content more than architecture; revisit when the destination is reached.
+(none: the way to the destination is clear)
 
 ## Out of scope
 
 - Building or deploying anything. This map ends at the decision.
 - Authoring the actual poll questions.
+- **Observability data model:** after running the saved Athena and Logs Insights queries against real log data from a deployed stack, decide whether and how to filter and normalize events across sources into a WARN/ERROR-style stream, and whether handler events should move to S3. Out of scope because it needs data that only exists after the build; start it as a fresh effort then.
+- **Privacy notice:** wording of the one-line notice on the form and whether any privacy regime applies to collecting an email (legal basis was not researched). Out of scope as launch content rather than architecture; keep it on the launch checklist.
