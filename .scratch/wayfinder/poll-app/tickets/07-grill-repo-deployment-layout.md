@@ -1,7 +1,7 @@
 ---
 type: grilling
-status: open
-claimed:
+status: closed
+claimed: nate (repo layout session)
 blocked_by: []
 ---
 
@@ -10,3 +10,25 @@ blocked_by: []
 ## Question
 
 Where does the poll code live and how does it deploy? The [Decide: architecture](04-decide-architecture.md) decisions imply one repo: the poll definitions, shared page, submit Lambda and CDK stack are deployed together in one CDK deploy (definitions bundled into the Lambda and uploaded to S3). Confirm or revise that against the earlier advice to keep app code in a separate repo, and decide: directory layout (for example `polls/`, `lambda/`, `site/`), new stack and input class names following the Input/Stack pattern, how the Lambda and page assets are built and tested, golden-test and unit-test expectations, and how a new poll gets deployed (`make` target, CI).
+
+## Resolution
+
+Confirmed by the human at the end of the grilling session. Repo facts and decisions:
+
+Repo facts looked up (not decisions): `make static-check` (shellcheck, black `--line-length=79`, pylint `--max-line-length=90`, unit tests via `pytest -m unit tests/`) runs in CI on pull requests and pushes to `main` (`.github/workflows/static-checks.yml`); black and pylint cover `git ls-files '*.py'`, so any Lambda Python is linted automatically. Deploys are local `make cdk-deploy` / `make cdk-deploy-all`; no deploy CI. Golden tests: one parametrized unit test per stack and environment, golden JSON under `test_data/unit/stack/...`. Per-environment settings are JSON under `config/<env>/...` with a `JsonSettingBase` subclass. The main site's Hugo content is not in this repo.
+
+1. **Repo:** this repo. One CDK deploy ships the stack, Lambda code, shared page and poll JSON. Rationale: the reason for the earlier "separate app repo" advice (App Runner container, image pipeline) is gone; the Lambda is a small stdlib + boto3 handler with nothing to build; page, JSON and handler change together; `make static-check` already lints and tests everything. Rejected: separate repo publishing artifacts; separate repo with its own CDK stack.
+2. **Directory layout:** `polls/` (one JSON file per poll definition; single canonical copy used for both the S3 upload and the Lambda bundle), `lambda/submit/` (Python handler and validation code), `site/polls/` (shared `index.html`, script, stylesheet), `stack/polls.py` (`PollsInput` and `PollsStack` per the existing Input/Stack pattern), matching tests under `tests/unit/`. Rejected: everything under one `polls_app/` directory; poll JSON inside the Lambda directory.
+3. **Lambda bundle assembly:** a git symlink `lambda/submit/polls` -> `../../polls`, with the stack using `Code.from_asset("lambda/submit", follow_symlinks=SymlinkFollowMode.ALWAYS)`. No build step; the handler loads definitions from a `polls` folder next to itself in both tests and the deployed bundle. Rejected: staging directory built at synth time; CDK local bundling (needs a Docker image named as fallback). Facts checked (aws-iac MCP, aws-cdk-lib 2.273.0): `SymlinkFollowMode.ALWAYS` "Copy all the files the symlinks point to (always follow)", reading targets outside the source directory (https://constructs.dev/packages/aws-cdk-lib/v/2.273.0/api/SymlinkFollowMode?lang=python). The exact `Code.from_asset` `follow_symlinks` signature was not confirmed (the docs hit showed it for `from_asset_image`); verify at implementation. `BucketDeployment` supports `exclude`, `prune` and `destination_key_prefix` (https://constructs.dev/packages/aws-cdk-lib/v/2.273.0?submodule=aws_s3_deployment&lang=python).
+4. **Golden tests and assets:** normalize asset hashes in the golden-test comparison via a small helper in `tests/helper.py` (replace asset hashes in keys and metadata with a placeholder), so golden files change only when infrastructure changes. Handler logic and poll content are covered by their own unit tests. Rejected: accepting golden churn on every poll or handler edit; fixed test-only asset fixtures passed through the input class. Note: that asset hashes appear in the template is standard CDK behaviour, not verified for this stack yet.
+5. **Handler testing:** inject the DynamoDB table via a small function and use an in-memory fake in unit tests (no new dependency; assert the exact `RESPONSE#` and `EMAIL#` records written). Add a unit test that loads and validates every file in `polls/` (valid question types, `closesAt` format, worst-case body under 6 KB) so a bad poll fails CI, and tests for the validation rules of each question type, closing time and body limits. Rejected: `moto` (new dependency; can be added later); integration-only tests under the `aws` marker.
+6. **Deploying a new poll:** add a thin `make deploy-polls` target (runs unit tests including the poll validation test, then the CDK deploy of `NateNiteProductionPollsStack`) and a `make diff-polls` sibling; no new CI deploy. Stack name follows the repo pattern `{APP_NAME}{Env}{Name}Stack` (`NateNiteProductionSiteStack`, `NateNiteProductionCertificateStack`). CDK deploys a stack's dependencies by default, so the Site stack's new rate rule deploys with it. Rejected: existing targets only (relies on remembering the stack name and order); deploy from CI via GitHub Actions and an AWS role (new credentials and IAM role to manage).
+7. **Where numbers live:** a new `PollsSetting` (`config/production/polls/polls.json`, `RELATIVE_PATH_TEMPLATE` `polls/polls.json`) holds the infrastructure numbers (polls subdomain, reserved concurrency 2, rate-rule limit 20 and window 300 s), per environment and covered by the golden test. Application limits (free text 500 characters, email 254, 6 KB body cap) are constants in `lambda/submit/limits.py`, imported by both the handler and the poll validation test so they cannot disagree. Rejected: all numbers in `PollsSetting` passed as Lambda environment variables; all numbers as code constants (skips the repo's settings pattern).
+8. **Page JavaScript testing:** put the pure logic (SHA-256 body hash for `x-amz-content-sha256`, request body builder, retry/backoff timing) in `site/polls/lib.js` with no DOM access, tested with Node's built-in test runner (`node --test`), wired into `make unit-test` and therefore `make static-check` in CI. No new npm dependency; Node is already required for the CDK CLI and is present on `ubuntu-latest`. Rejected: no automated JavaScript tests; a full framework (vitest or jest with jsdom).
+
+### Open items for the build
+
+- Confirm the `Code.from_asset` `follow_symlinks` signature (docs hit showed it for `from_asset_image`).
+- Confirm that asset hashes appear in the synthesized template for this stack, as expected from standard CDK behaviour.
+- `make unit-test` and CI now need Node (`node --test`); `ubuntu-latest` has it, but `.github/workflows/static-checks.yml` does not pin a version.
+- Incidental, unrelated: `config/template_defaults.json` has `iac_project_url` `github.com/natemarks/natenate.net` (repo is `natenite.net`); it is the `iac` tag on every resource. Not changed.
