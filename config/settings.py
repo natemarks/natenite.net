@@ -104,3 +104,16 @@ class AppVpcSetting(JsonSettingBase):
 
     cidr: str
     max_azs: int = 2
+
+
+@dataclass(frozen=True, kw_only=True)
+class PollsSetting(JsonSettingBase):
+    """Settings for the Polls stack template.
+
+    Commonly customized fields:
+    - subdomain of the default fqdn that serves the polls site
+    """
+
+    RELATIVE_PATH_TEMPLATE: ClassVar[str] = "polls/polls.json"
+
+    subdomain: str  # ex. "polls" serves polls.<default_fqdn>

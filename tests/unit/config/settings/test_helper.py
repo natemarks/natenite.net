@@ -10,6 +10,7 @@ import pytest
 from tests.helper import (
     case_data_path,
     case_file_path,
+    normalize_asset_hashes,
     read_case_json,
     read_case_text,
     write_case_json,
@@ -87,3 +88,33 @@ def test_read_case_text_raises_for_missing_file(tmp_path):
 
     with pytest.raises(FileNotFoundError, match=str(missing_path)):
         read_case_text(tmp_path, "missing.txt")
+
+
+HASH_A = "a" * 64
+HASH_B = "0123456789abcdef" * 4
+
+
+@pytest.mark.unit
+def test_normalize_asset_hashes_replaces_asset_keys():
+    """Asset content hashes in object keys become a stable placeholder."""
+    template = {
+        "Resources": {
+            "Fn": {"Properties": {"Code": {"S3Key": f"{HASH_A}.zip"}}},
+            "Dep": {"Properties": {"SourceObjectKeys": [f"{HASH_B}.zip"]}},
+        }
+    }
+
+    assert normalize_asset_hashes(template) == {
+        "Resources": {
+            "Fn": {"Properties": {"Code": {"S3Key": "ASSET_HASH.zip"}}},
+            "Dep": {"Properties": {"SourceObjectKeys": ["ASSET_HASH.zip"]}},
+        }
+    }
+
+
+@pytest.mark.unit
+def test_normalize_asset_hashes_leaves_other_values_alone():
+    """Short hex strings and ordinary text are not touched."""
+    template = {"Name": "deadbeef", "Count": 3, "Tags": ["a", "b"]}
+
+    assert normalize_asset_hashes(template) == template

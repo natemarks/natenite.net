@@ -195,6 +195,25 @@ cdk-deploy-all: node_modules .venv ## cdk deploy all stacks in an environment
        $(CDK) deploy --all $(stack) -c app_env=$(app_env); \
     )
 
+diff-polls: node_modules .venv ## cdk diff the polls stack and the stacks it depends on
+	$(eval CDK := $(shell find . -type f -name cdk))
+	( \
+       source scripts/enable_pyenv.sh; \
+       pyenv local $(PYTHON_VERSION); \
+       source .venv/bin/activate; \
+       $(CDK) diff '*PollsStack' -c app_env=$(app_env); \
+    )
+
+deploy-polls: unit-test node_modules .venv ## run unit tests, then deploy the polls stack (and its dependencies)
+	# CDK's default approval prompt stays on so IAM broadening is reviewed
+	$(eval CDK := $(shell find . -type f -name cdk))
+	( \
+       source scripts/enable_pyenv.sh; \
+       pyenv local $(PYTHON_VERSION); \
+       source .venv/bin/activate; \
+       $(CDK) deploy '*PollsStack' -c app_env=$(app_env); \
+    )
+
 cdk-bootstrap: node_modules .venv ## bootstrap the default account and region for an environment
 	# cdk executable usually: node_modules/aws-cdk/bin/cdk
 	# have to be evaluated after the node_modules target

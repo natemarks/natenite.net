@@ -417,6 +417,19 @@
       }
     }
   },
+  "Outputs": {
+    "ExportsOutputFnGetAttNateNiteProductionSiteWebACLArn4855ADFC": {
+      "Value": {
+        "Fn::GetAtt": [
+          "NateNiteProductionSiteWebACL",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "NateNiteProductionSiteStack:ExportsOutputFnGetAttNateNiteProductionSiteWebACLArn4855ADFC"
+      }
+    }
+  },
   "Parameters": {
     "BootstrapVersion": {
       "Type": "AWS::SSM::Parameter::Value<String>",

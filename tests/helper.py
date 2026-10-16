@@ -13,6 +13,7 @@ Customize:
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -68,3 +69,23 @@ def write_case_json(base_path: Path, relative_path: str, payload: Any) -> None:
 def read_case_json(base_path: Path, relative_path: str) -> Any:
     """Read JSON data from case data."""
     return json.loads(read_case_text(base_path, relative_path))
+
+
+_ASSET_HASH = re.compile(r"[0-9a-f]{64}")
+
+
+def normalize_asset_hashes(value: Any) -> Any:
+    """Return `value` with every 64-hex asset hash replaced by a placeholder.
+
+    CDK embeds content hashes of code and file assets in synthesized
+    templates. Normalizing them keeps golden files stable when a poll or
+    handler changes, and when the CDK library (which ships its own assets)
+    is upgraded.
+    """
+    if isinstance(value, dict):
+        return {k: normalize_asset_hashes(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize_asset_hashes(v) for v in value]
+    if isinstance(value, str):
+        return _ASSET_HASH.sub("ASSET_HASH", value)
+    return value

@@ -4,6 +4,7 @@
 Purpose:
 - Stack synthesis from real environment config under `config/<env>/...`.
 - Verify Site stack dependency on Certificate stack.
+- Include the Polls stack so the Site template matches the deployed one.
 
 Customize:
 - Keep the `*_actual` test for real environment contracts.
@@ -16,6 +17,7 @@ from aws_cdk import App, assertions, Environment
 from config.settings import get_actual_path
 from config.project import APP_ENV_TO_AWS_ACCOUNT
 from stack.certificate import CertificateStack, CertificateInput
+from stack.polls import PollsStack, PollsInput
 from stack.site import SiteStack, SiteInput
 from tests.helper import case_data_path, write_case_json, read_case_json
 
@@ -59,6 +61,16 @@ def test_site_stack_actual(request, environment, update_golden):
         cdk_env=cdk_env,
         s_input=site_input,
         certificate_stack=cert_stack,
+    )
+
+    # The Polls stack attaches this stack's web ACL; building it makes the
+    # Site template match the one deployed (it gains the ACL export).
+    PollsStack(
+        scope=app,
+        cdk_env=cdk_env,
+        s_input=PollsInput.from_config_directory(input_path),
+        certificate_stack=cert_stack,
+        site_stack=site_stack,
     )
 
     template = assertions.Template.from_stack(site_stack)

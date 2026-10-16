@@ -1,0 +1,36 @@
+:root {
+  color-scheme: light dark;
+  --gutter: 16px;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  margin: 0;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--gutter);
+}
+
+fieldset {
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+label {
+  display: block;
+  padding: 0.35rem 0;
+}
+
+.note {
+  opacity: 0.7;
+}
