@@ -42,3 +42,17 @@ Stack modules follow a consistent pattern with two classes:
 ## Testing Requirements
 
 Every stack must have a parameter test for each environment that tests for template changes. These tests ensure CloudFormation template stability across deployments.
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/<effort>/` (specs, issues, wayfinder maps and tickets). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary, recorded as a `Status:` line in issue files. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
