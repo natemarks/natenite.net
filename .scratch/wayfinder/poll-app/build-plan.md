@@ -37,7 +37,7 @@ P2, P3 and P4 need no AWS and can be done in any order or in parallel. P6 needs 
 
 All local synth or docs checks; no AWS resources. Record answers in the PR or a note.
 
-1. In the pinned `aws-cdk-lib==2.260.0` (the research read 2.273.0 docs), confirm these exist: `cloudfront_origins.FunctionUrlOrigin.with_origin_access_control`; `lambda_.Code.from_asset(..., follow_symlinks=...)` with `SymlinkFollowMode.ALWAYS`; `aws_logs.CfnDeliverySource`, `CfnDeliveryDestination`, `CfnDelivery` and the property that selects JSON output; `aws_glue.CfnTable`, `aws_athena.CfnWorkGroup`, `CfnNamedQuery`; `aws_logs.CfnQueryDefinition`; the Lambda runtime constant you will use. If something is missing, bump `requirements.txt` through `make update_cdk_libs` as its own change first.
+1. **Done (issue 01):** in the pinned `aws-cdk-lib` (now 2.273.0), these were confirmed to exist: `cloudfront_origins.FunctionUrlOrigin.with_origin_access_control`; `lambda_.Code.from_asset(..., follow_symlinks=...)` with `SymlinkFollowMode.ALWAYS`; `aws_logs.CfnDeliverySource`, `CfnDeliveryDestination`, `CfnDelivery` and the property that selects JSON output; `aws_glue.CfnTable`, `aws_athena.CfnWorkGroup`, `CfnNamedQuery`; `aws_logs.CfnQueryDefinition`; the Lambda runtime constant you will use. In 2.260.0 the Function URL OAC origin added only one of the two required Lambda permissions; 2.273.0 adds both, so the repo was bumped to 2.273.0 as its own change before building.
 2. Confirm asset hashes appear in the synthesized template for a Lambda `Code.from_asset` and a `BucketDeployment` (drives the helper in P7).
 3. Confirm `node` is available to `make unit-test` locally and note the version for CI.
 
@@ -150,7 +150,7 @@ Rollback: `cdk destroy NateNiteProductionPollsStack` removes everything except t
 - **Shared ACL coupling:** the polls stack imports the Site stack's ACL; with strong cross-stack references the export becomes hard to remove or rename later. Treat the ACL ARN export as permanent, or move the ACL to its own stack if that bothers you.
 - **Managed rules on free text:** the Core rule set may block some free-text content (only 5 of 22 rules were read). Smoke-test it.
 - **Concurrency cap of 2:** a burst above 20 requests per second loses submissions until retry; adjustable in `polls.json`.
-- **Version drift:** `requirements.txt` pins `aws-cdk-lib==2.260.0`; confirm every construct in P0 before relying on it.
+- **Version drift:** `requirements.txt` pins `aws-cdk-lib==2.273.0` (bumped from 2.260.0 after the spike; all existing golden tests pass unchanged). Library bumps change the library-provided asset hashes in templates, so keep the golden-test helper normalizing every asset hash.
 - **Golden tag side effect:** do not fix the `iac_project_url` typo (`natenate.net`) inside this work; it is the `iac` tag on every resource and changing it rewrites every golden file. Do it as a separate change.
 - **Logging lag:** CloudFront logs arrive late; do not judge logging by the first hour.
 
