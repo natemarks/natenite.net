@@ -488,3 +488,112 @@ def test_the_rate_rule_watches_the_host_and_path_the_polls_site_serves():
     assert watched_host in distribution["Aliases"]
     assert watched_path == submit_behavior["PathPattern"]
     assert watched_method in submit_behavior["AllowedMethods"]
+
+
+def _access_log_bucket(template):
+    """The one bucket that expires its objects: the access log bucket."""
+    buckets = {
+        name: body
+        for name, body in template.find_resources("AWS::S3::Bucket").items()
+        if "LifecycleConfiguration" in body["Properties"]
+    }
+    assert len(buckets) == 1
+    return buckets.popitem()
+
+
+@pytest.mark.unit
+def test_access_logs_go_to_a_private_bucket_that_expires_them_after_a_year():
+    """Access logs are kept privately for a year, and survive teardown."""
+    template = polls_template()
+    _, bucket = _access_log_bucket(template)
+    props = bucket["Properties"]
+    assert props["PublicAccessBlockConfiguration"] == {
+        "BlockPublicAcls": True,
+        "BlockPublicPolicy": True,
+        "IgnorePublicAcls": True,
+        "RestrictPublicBuckets": True,
+    }
+    rules = props["LifecycleConfiguration"]["Rules"]
+    assert [(rule["Status"], rule["ExpirationInDays"]) for rule in rules] == [
+        ("Enabled", 365)
+    ]
+    assert bucket["DeletionPolicy"] == "Retain"
+
+
+@pytest.mark.unit
+def test_log_delivery_may_write_only_from_this_accounts_delivery_sources():
+    """Only this account's log delivery may write into the log bucket."""
+    template = polls_template()
+    name, _ = _access_log_bucket(template)
+    policies = [
+        policy
+        for policy in template.find_resources("AWS::S3::BucketPolicy").values()
+        if policy["Properties"]["Bucket"] == {"Ref": name}
+    ]
+    assert len(policies) == 1
+    statements = [
+        statement
+        for statement in policies[0]["Properties"]["PolicyDocument"][
+            "Statement"
+        ]
+        if statement.get("Principal")
+        == {"Service": "delivery.logs.amazonaws.com"}
+    ]
+    assert len(statements) == 1
+    statement = statements[0]
+    assert statement["Effect"] == "Allow"
+    assert statement["Action"] == "s3:PutObject"
+    condition = statement["Condition"]
+    assert condition["StringEquals"]["s3:x-amz-acl"] == (
+        "bucket-owner-full-control"
+    )
+    assert condition["StringEquals"]["aws:SourceAccount"] == (
+        APP_ENV_TO_AWS_ACCOUNT[ENVIRONMENT]
+    )
+    assert "delivery-source:*" in str(condition["ArnLike"]["aws:SourceArn"])
+
+
+@pytest.mark.unit
+def test_the_distribution_delivers_json_access_logs_to_the_log_bucket():
+    """The distribution's access logs reach the bucket as JSON."""
+    template = polls_template()
+    bucket_name, _ = _access_log_bucket(template)
+    ((source_id, source),) = template.find_resources(
+        "AWS::Logs::DeliverySource"
+    ).items()
+    ((destination_id, destination),) = template.find_resources(
+        "AWS::Logs::DeliveryDestination"
+    ).items()
+    ((_, delivery),) = template.find_resources("AWS::Logs::Delivery").items()
+
+    assert source["Properties"]["LogType"] == "ACCESS_LOGS"
+    assert "Distribution" in str(source["Properties"]["ResourceArn"])
+    assert destination["Properties"]["OutputFormat"] == "json"
+    assert bucket_name in str(
+        destination["Properties"]["DestinationResourceArn"]
+    )
+    assert "cloudfront/polls" in str(
+        destination["Properties"]["DestinationResourceArn"]
+    )
+    props = delivery["Properties"]
+    assert props["DeliverySourceName"] == {"Ref": source_id}
+    assert props["DeliveryDestinationArn"] == {
+        "Fn::GetAtt": [destination_id, "Arn"]
+    }
+    assert props["S3EnableHiveCompatiblePath"] is True
+
+
+@pytest.mark.unit
+def test_the_delivery_waits_for_the_bucket_policy_that_lets_it_write():
+    """The delivery is created only after the policy allowing it."""
+    template = polls_template()
+    bucket_name, _ = _access_log_bucket(template)
+    policy_ids = [
+        name
+        for name, policy in template.find_resources(
+            "AWS::S3::BucketPolicy"
+        ).items()
+        if policy["Properties"]["Bucket"] == {"Ref": bucket_name}
+    ]
+    ((_, delivery),) = template.find_resources("AWS::Logs::Delivery").items()
+    assert set(policy_ids) <= set(delivery.get("DependsOn", []))

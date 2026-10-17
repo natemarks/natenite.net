@@ -636,6 +636,171 @@
         "Type": "A"
       }
     },
+    "NateNiteProductionPollsAccessLogBucket9851091C": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 365,
+              "Status": "Enabled"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "NateNiteProductionPollsAccessLogBucketPolicyFCDAF0DD": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "NateNiteProductionPollsAccessLogBucket9851091C"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "NateNiteProductionPollsAccessLogBucket9851091C",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "NateNiteProductionPollsAccessLogBucket9851091C",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": "s3:PutObject",
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "aws:SourceAccount": "605560722292"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:logs:us-east-1:605560722292:delivery-source:*"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "NateNiteProductionPollsAccessLogBucket9851091C",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
+                  ]
+                ]
+              },
+              "Sid": "AWSLogsDeliveryWrite"
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
+    },
+    "NateNiteProductionPollsAccessLogSource": {
+      "Type": "AWS::Logs::DeliverySource",
+      "Properties": {
+        "LogType": "ACCESS_LOGS",
+        "Name": "NateNiteProductionPolls-access-logs",
+        "ResourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:aws:cloudfront::605560722292:distribution/",
+              {
+                "Ref": "NateNiteProductionPollsDistribution8F8C8E68"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "NateNiteProductionPollsAccessLogDestination": {
+      "Type": "AWS::Logs::DeliveryDestination",
+      "Properties": {
+        "DestinationResourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Fn::GetAtt": [
+                  "NateNiteProductionPollsAccessLogBucket9851091C",
+                  "Arn"
+                ]
+              },
+              "/cloudfront/polls"
+            ]
+          ]
+        },
+        "Name": "NateNiteProductionPolls-access-logs",
+        "OutputFormat": "json"
+      }
+    },
+    "NateNiteProductionPollsAccessLogDelivery": {
+      "Type": "AWS::Logs::Delivery",
+      "Properties": {
+        "DeliveryDestinationArn": {
+          "Fn::GetAtt": [
+            "NateNiteProductionPollsAccessLogDestination",
+            "Arn"
+          ]
+        },
+        "DeliverySourceName": {
+          "Ref": "NateNiteProductionPollsAccessLogSource"
+        },
+        "S3EnableHiveCompatiblePath": true
+      },
+      "DependsOn": [
+        "NateNiteProductionPollsAccessLogBucketPolicyFCDAF0DD"
+      ]
+    },
     "NateNiteProductionPollsPageDeploymentAwsCliLayer144FEB86": {
       "Type": "AWS::Lambda::LayerVersion",
       "Properties": {

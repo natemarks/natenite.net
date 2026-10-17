@@ -25,6 +25,7 @@ from aws_cdk import (
     SymlinkFollowMode,
     aws_cloudfront as cloudfront,
     aws_dynamodb as dynamodb,
+    aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
     aws_route53 as r53,
@@ -113,6 +114,69 @@ class PollsStack(Stack):
     - CertificateStack (for certificate)
     - SiteStack (for web ACL)
     """
+
+    def _deliver_access_logs(self) -> None:
+        """Send the distribution's access logs to a private bucket as JSON."""
+        prefix = self._prefix
+        bucket = s3.Bucket(
+            self,
+            f"{prefix}AccessLogBucket",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            enforce_ssl=True,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            removal_policy=RemovalPolicy.RETAIN,
+            lifecycle_rules=[s3.LifecycleRule(expiration=Duration.days(365))],
+        )
+        bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AWSLogsDeliveryWrite",
+                principals=[
+                    iam.ServicePrincipal("delivery.logs.amazonaws.com")
+                ],
+                actions=["s3:PutObject"],
+                resources=[bucket.arn_for_objects("*")],
+                conditions={
+                    "StringEquals": {
+                        "s3:x-amz-acl": "bucket-owner-full-control",
+                        "aws:SourceAccount": self.account,
+                    },
+                    "ArnLike": {
+                        "aws:SourceArn": (
+                            f"arn:aws:logs:{self.region}:{self.account}"
+                            ":delivery-source:*"
+                        )
+                    },
+                },
+            )
+        )
+        source = logs.CfnDeliverySource(
+            self,
+            f"{prefix}AccessLogSource",
+            name=f"{prefix}-access-logs",
+            log_type="ACCESS_LOGS",
+            resource_arn=(
+                f"arn:aws:cloudfront::{self.account}:distribution/"
+                f"{self.distribution.distribution_id}"
+            ),
+        )
+        destination = logs.CfnDeliveryDestination(
+            self,
+            f"{prefix}AccessLogDestination",
+            name=f"{prefix}-access-logs",
+            output_format="json",
+            destination_resource_arn=bucket.arn_for_objects(
+                "cloudfront/polls"
+            ),
+        )
+        delivery = logs.CfnDelivery(
+            self,
+            f"{prefix}AccessLogDelivery",
+            delivery_source_name=source.ref,
+            delivery_destination_arn=destination.attr_arn,
+            s3_enable_hive_compatible_path=True,
+        )
+        # Creating a delivery checks it can write, so the policy comes first
+        delivery.node.add_dependency(bucket.policy)
 
     def __init__(
         self,
@@ -280,6 +344,8 @@ function handler(event) {
                 targets.CloudFrontTarget(self.distribution)
             ),
         )
+
+        self._deliver_access_logs()
 
         # The shared page goes at the bucket root. Excluding the definitions
         # prefix keeps this deployment from pruning the definitions.

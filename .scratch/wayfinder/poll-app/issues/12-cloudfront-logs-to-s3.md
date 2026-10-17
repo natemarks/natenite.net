@@ -16,10 +16,10 @@ Human gate: deploy and confirm logs actually arrive.
 
 ## Acceptance criteria
 
-- [ ] Template assertions: delivery source, destination (S3, JSON) and delivery exist; the bucket is private with a 365-day expiration rule and a delivery policy.
-- [ ] The golden file is updated and read.
-- [ ] After deploy: log files appear in the bucket (allow several hours; delivery can lag up to 24 hours) and are JSON.
-- [ ] Record whether a WAF-blocked request appears as a 403 with result type Error, and add the answer to the spec's further notes.
+- [x] Template assertions: delivery source, destination (S3, JSON) and delivery exist; the bucket is private with a 365-day expiration rule and a delivery policy.
+- [x] The golden file is updated and read.
+- [x] After deploy: log files appear in the bucket (allow several hours; delivery can lag up to 24 hours) and are JSON.
+- [x] Record whether a WAF-blocked request appears as a 403 with result type Error, and add the answer to the spec's further notes.
 
 ## Blocked by
 
@@ -28,3 +28,9 @@ Human gate: deploy and confirm logs actually arrive.
 ## User stories addressed
 
 Spec user stories: 48, 49
+
+## Comments
+
+- 2026-10-17: claimed. Seam: the stack template (code is tested; delivery of real logs is a human gate that takes hours). Confirming design choices with the owner before writing tests.
+- 2026-10-17: template and golden done (prefix cloudfront/polls, Hive paths, default fields, no cookies). Deploy and delivery check still open.
+- 2026-10-17: verified live. First log file arrived about 10 minutes after deploy (not hours): `cloudfront/polls/<distribution>.<date>-<hour>.<hash>.gz`, gzipped JSON lines. WAF-blocked POSTs appear as `sc-status` 403 with `x-edge-result-type` Error and `x-edge-detailed-result-type` Error. Requests the function rejects (400, 405) also read Error, so tell them apart by status and by the function log, not by result type.
