@@ -97,7 +97,8 @@ def render_query(name: str, database: str, days: int | None = None) -> str:
     """The saved query `name` as SQL, for `days` (default: the console's)."""
     query = QUERIES[name]
     return query.sql.format(
-        database=database, days=days if days is not None else query.console_days
+        database=database,
+        days=days if days is not None else query.console_days,
     )
 
 
@@ -106,11 +107,31 @@ def column_name(field: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", field.lower()).strip("_")
 
 
+def _projection_parameters(location: str) -> dict:
+    """Table parameters that work the partitions out from the folder names."""
+    parameters = {"projection.enabled": "true"}
+    for name, value_range, digits in PARTITIONS:
+        parameters[f"projection.{name}.type"] = "integer"
+        parameters[f"projection.{name}.range"] = value_range
+        if digits:
+            parameters[f"projection.{name}.digits"] = str(digits)
+    parameters["storage.location.template"] = (
+        location
+        + "/".join(f"{name}=${{{name}}}" for name, _, _ in PARTITIONS)
+        + "/"
+    )
+    return parameters
+
+
 class AccessLogQueries(Construct):  # pylint: disable=too-few-public-methods
     """The table, workgroup and saved queries over the access logs."""
 
     def __init__(
-        self, scope: Construct, construct_id: str, *, bucket: s3.IBucket,
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        bucket: s3.IBucket,
         prefix: str,
     ):
         super().__init__(scope, construct_id)
@@ -124,17 +145,7 @@ class AccessLogQueries(Construct):  # pylint: disable=too-few-public-methods
             ),
         )
         location = f"s3://{bucket.bucket_name}/{LOG_PREFIX}/"
-        parameters = {"projection.enabled": "true"}
-        for name, value_range, digits in PARTITIONS:
-            parameters[f"projection.{name}.type"] = "integer"
-            parameters[f"projection.{name}.range"] = value_range
-            if digits:
-                parameters[f"projection.{name}.digits"] = str(digits)
-        parameters["storage.location.template"] = (
-            location
-            + "/".join(f"{name}=${{{name}}}" for name, _, _ in PARTITIONS)
-            + "/"
-        )
+        parameters = _projection_parameters(location)
         table = glue.CfnTable(
             self,
             "Table",
@@ -173,24 +184,7 @@ class AccessLogQueries(Construct):  # pylint: disable=too-few-public-methods
             ),
         )
         table.add_dependency(database)
-        workgroup = athena.CfnWorkGroup(
-            self,
-            "WorkGroup",
-            name=workgroup_name(prefix),
-            description="Queries over the polls CloudFront access logs",
-            work_group_configuration=athena.CfnWorkGroup.WorkGroupConfigurationProperty(
-                enforce_work_group_configuration=True,
-                bytes_scanned_cutoff_per_query=1024**3,
-                result_configuration=athena.CfnWorkGroup.ResultConfigurationProperty(
-                    output_location=(
-                        f"s3://{bucket.bucket_name}/{RESULTS_PREFIX}/"
-                    ),
-                    encryption_configuration=athena.CfnWorkGroup.EncryptionConfigurationProperty(
-                        encryption_option="SSE_S3"
-                    ),
-                ),
-            ),
-        )
+        workgroup = self._workgroup(bucket, prefix)
         for name in QUERIES:
             saved = athena.CfnNamedQuery(
                 self,
@@ -201,3 +195,26 @@ class AccessLogQueries(Construct):  # pylint: disable=too-few-public-methods
                 query_string=render_query(name, db_name),
             )
             saved.add_dependency(table)
+
+    def _workgroup(self, bucket: s3.IBucket, prefix: str):
+        """The workgroup: results in the expiring folder, scans capped."""
+        results = athena.CfnWorkGroup.ResultConfigurationProperty(
+            output_location=f"s3://{bucket.bucket_name}/{RESULTS_PREFIX}/",
+            encryption_configuration=(
+                athena.CfnWorkGroup.EncryptionConfigurationProperty(
+                    encryption_option="SSE_S3"
+                )
+            ),
+        )
+        settings = athena.CfnWorkGroup.WorkGroupConfigurationProperty(
+            enforce_work_group_configuration=True,
+            bytes_scanned_cutoff_per_query=1024**3,
+            result_configuration=results,
+        )
+        return athena.CfnWorkGroup(
+            self,
+            "WorkGroup",
+            name=workgroup_name(prefix),
+            description="Queries over the polls CloudFront access logs",
+            work_group_configuration=settings,
+        )

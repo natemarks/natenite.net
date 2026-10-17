@@ -53,7 +53,9 @@ class FakeAthena:  # pylint: disable=too-few-public-methods
         # pylint: disable=invalid-name
         self.stopped.append(QueryExecutionId)
 
-    def get_query_results(self, QueryExecutionId, NextToken=None):  # noqa: N803
+    def get_query_results(
+        self, QueryExecutionId, NextToken=None
+    ):  # noqa: N803
         """One page of results; only the first page starts with the header."""
         # pylint: disable=invalid-name,unused-argument
         columns = sorted(self.rows[0]) if self.rows else ["c_ip"]
