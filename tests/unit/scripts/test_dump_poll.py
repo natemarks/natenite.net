@@ -111,3 +111,25 @@ def test_script_opens_the_environments_table_in_its_configured_region():
 
     assert table == "table:natenite-production-polls-responses"
     assert resource.calls == [("dynamodb", {"region_name": "us-east-1"})]
+
+
+@pytest.mark.unit
+def test_dump_prints_every_record_with_its_keys_in_a_fixed_order():
+    """DynamoDB returns attributes in no fixed order; the dump must not."""
+    shuffled = {
+        "sk": "RESPONSE#001",
+        "answers": {"q2": "b", "q1": "a"},
+        "pollVersion": Decimal(1),
+        "pk": "POLL#poll1",
+        "submittedAt": "2026-10-17T00:00:00Z",
+    }
+    in_another_order = dict(reversed(list(shuffled.items())))
+    in_another_order["answers"] = {"q1": "a", "q2": "b"}
+
+    first = dump_poll.dump_poll(PagedTable([shuffled]), "poll1")
+    second = dump_poll.dump_poll(PagedTable([in_another_order]), "poll1")
+
+    assert first == second
+    record = json.loads(first)[0]
+    assert list(record) == sorted(record)
+    assert list(record["answers"]) == sorted(record["answers"])

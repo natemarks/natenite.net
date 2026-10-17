@@ -51,8 +51,13 @@ def fetch_responses(table, poll_id):
 
 def dump_poll(table, poll_id):
     """Return the poll's responses as indented JSON text."""
+    # Sorted keys: DynamoDB returns attributes in no fixed order, and the
+    # output should be the same text for the same data (diffs, automation).
     return json.dumps(
-        fetch_responses(table, poll_id), indent=2, default=_plain_number
+        fetch_responses(table, poll_id),
+        indent=2,
+        default=_plain_number,
+        sort_keys=True,
     )
 
 
