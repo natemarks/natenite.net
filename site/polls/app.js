@@ -1,6 +1,6 @@
-// Builds the poll form from the poll's definition. Slice 02 only displays the
-// form; submitting arrives in a later slice. All text is set with
-// textContent, never innerHTML.
+// Builds the poll form from the poll's definition and submits the answers.
+// All text is set with textContent, never innerHTML. The request signing
+// logic lives in lib.js (PollLib), which has its own tests.
 (function () {
   'use strict';
 
@@ -37,6 +37,17 @@
     return fieldset;
   }
 
+  function readAnswers(form, questions) {
+    var answers = {};
+    questions.forEach(function (question) {
+      var value = form.elements.namedItem(question.id).value;
+      if (value) {
+        answers[question.id] = value;
+      }
+    });
+    return answers;
+  }
+
   function renderPoll(definition) {
     document.title = definition.title;
     root.textContent = '';
@@ -45,17 +56,55 @@
     heading.textContent = definition.title;
     root.appendChild(heading);
 
-    var form = document.createElement('form');
-    definition.questions.forEach(function (question) {
-      if (question.type === 'single') {
-        form.appendChild(renderSingleChoice(question));
-      }
+    var questions = definition.questions.filter(function (question) {
+      return question.type === 'single';
     });
 
-    var note = document.createElement('p');
-    note.className = 'note';
-    note.textContent = 'Submitting is not available yet.';
-    form.appendChild(note);
+    var form = document.createElement('form');
+    questions.forEach(function (question) {
+      form.appendChild(renderSingleChoice(question));
+    });
+
+    var button = document.createElement('button');
+    button.type = 'submit';
+    button.textContent = 'Submit';
+    form.appendChild(button);
+
+    var status = document.createElement('p');
+    status.className = 'note';
+    status.setAttribute('role', 'status');
+    form.appendChild(status);
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var answers = readAnswers(form, questions);
+      if (Object.keys(answers).length !== questions.length) {
+        status.textContent = 'Please answer every question.';
+        return;
+      }
+      button.disabled = true;
+      status.textContent = 'Sending…';
+      PollLib.prepareSubmission(definition.id, answers)
+        .then(function (prepared) {
+          return fetch('/submit', {
+            method: 'POST',
+            headers: prepared.headers,
+            body: prepared.body
+          });
+        })
+        .then(function (response) {
+          if (response.status !== 201) {
+            throw new Error('status ' + response.status);
+          }
+          showMessage('Thank you! Your response was recorded.');
+        })
+        .catch(function () {
+          button.disabled = false;
+          status.textContent =
+            'Sorry, your response could not be sent. Please try again.';
+        });
+    });
+
     root.appendChild(form);
   }
 

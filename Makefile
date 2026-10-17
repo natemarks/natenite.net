@@ -70,6 +70,7 @@ unit-test: .venv ## run test that have no external dependencies
        source .venv/bin/activate; \
        python3 -m pytest -v -m "unit" tests/; \
     )
+	node --test "tests/js/**/*.test.js"
 
 unit-update_golden: .venv ## update update golden files with latest results
 	( \
@@ -228,6 +229,14 @@ cdk-bootstrap: node_modules .venv ## bootstrap the default account and region fo
        $(CDK) $(shell bash scripts/cdk_bootstrap.sh) -c app_env=$(app_env); \
     )
 
+
+dump-poll: .venv ## print one poll's responses as JSON (make dump-poll poll=poll1)
+	( \
+       source scripts/enable_pyenv.sh; \
+       pyenv local $(PYTHON_VERSION); \
+       source .venv/bin/activate; \
+       PYTHONPATH="." python3 scripts/dump_poll.py $(poll) --app-env $(app_env); \
+    )
 
 discover: .venv ## update environment config data with discovered information
 	( \

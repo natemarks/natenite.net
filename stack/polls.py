@@ -19,15 +19,19 @@ Customize:
 from dataclasses import dataclass
 from pathlib import Path
 from aws_cdk import (
+    Duration,
     Stack,
     RemovalPolicy,
+    SymlinkFollowMode,
     aws_cloudfront as cloudfront,
+    aws_dynamodb as dynamodb,
+    aws_lambda as lambda_,
     aws_route53 as r53,
     aws_route53_targets as targets,
     aws_s3 as s3,
     aws_s3_deployment as s3deploy,
 )
-from aws_cdk.aws_cloudfront_origins import S3BucketOrigin
+from aws_cdk.aws_cloudfront_origins import FunctionUrlOrigin, S3BucketOrigin
 from aws_cdk import Environment as cdk_environment
 from constructs import Construct
 from config.helper import APP_NAME, PROJECT_ROOT
@@ -52,6 +56,10 @@ class PollsInput:
         return (
             f"{self.polls_setting.subdomain}.{self.env_setting.default_fqdn}"
         )
+
+    def table_name(self) -> str:
+        """Return the responses table name (shared with the owner scripts)."""
+        return f"{APP_NAME.lower()}-{self.env_setting.app_env}-polls-responses"
 
     @classmethod
     def from_config_directory(cls, data_path: Path) -> "PollsInput":
@@ -105,6 +113,46 @@ class PollsStack(Stack):
             auto_delete_objects=True,
         )
 
+        # Gathered responses cannot be rebuilt: keep the table when the stack
+        # goes away and require a deliberate step to delete it. Point-in-time
+        # recovery stays off because it would keep deleted emails for 35 days.
+        self.responses_table = dynamodb.Table(
+            self,
+            f"{self._prefix}ResponsesTable",
+            table_name=self.s_input.table_name(),
+            partition_key=dynamodb.Attribute(
+                name="pk", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="sk", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            deletion_protection=True,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+
+        # The submit function. `polls` inside its folder is a symlink to the
+        # repository's poll definitions; following it bundles the real files.
+        self.submit_function = lambda_.Function(
+            self,
+            f"{self._prefix}SubmitFunction",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="handler.handler",
+            code=lambda_.Code.from_asset(
+                str(PROJECT_ROOT / "lambda" / "submit"),
+                follow_symlinks=SymlinkFollowMode.ALWAYS,
+                exclude=["__pycache__", "*.pyc"],
+            ),
+            memory_size=256,
+            timeout=Duration.seconds(10),
+            environment={"TABLE_NAME": self.responses_table.table_name},
+        )
+        self.responses_table.grant(self.submit_function, "dynamodb:PutItem")
+        # IAM auth: only CloudFront (through OAC) may call the function URL
+        self.submit_url = self.submit_function.add_function_url(
+            auth_type=lambda_.FunctionUrlAuthType.AWS_IAM
+        )
+
         # Poll addresses have no file extension (/poll1, /poll1/): serve the
         # shared page for them. Files such as /app.js or
         # /definitions/poll1.json pass through unchanged.
@@ -143,6 +191,21 @@ function handler(event) {
                     )
                 ],
             ),
+            additional_behaviors={
+                "/submit": cloudfront.BehaviorOptions(
+                    origin=FunctionUrlOrigin.with_origin_access_control(
+                        self.submit_url
+                    ),
+                    allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+                    cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                    origin_request_policy=(
+                        cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
+                    ),
+                    viewer_protocol_policy=(
+                        cloudfront.ViewerProtocolPolicy.HTTPS_ONLY
+                    ),
+                )
+            },
             domain_names=[self.s_input.fqdn()],
             certificate=certificate_stack.certificate,
             default_root_object="index.html",
