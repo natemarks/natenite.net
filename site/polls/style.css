@@ -52,3 +52,8 @@ textarea {
     color: #ff8a80;
   }
 }
+
+input[type="email"] {
+  font: inherit;
+  max-width: 100%;
+}

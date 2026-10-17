@@ -24,8 +24,13 @@
 
   // The request body and the headers to send with it. The body string is
   // built once and hashed as-is, so the signed bytes are the sent bytes.
-  async function prepareSubmission(pollId, answers) {
-    var body = JSON.stringify({ pollId: pollId, answers: answers });
+  async function prepareSubmission(pollId, answers, email) {
+    var request = { pollId: pollId, answers: answers };
+    var trimmed = typeof email === 'string' ? email.trim() : '';
+    if (trimmed !== '') {
+      request.email = trimmed;
+    }
+    var body = JSON.stringify(request);
     return {
       body: body,
       headers: {
@@ -92,7 +97,25 @@
     return !Number.isNaN(closing) && nowMs >= closing;
   }
 
+  // A message for rejections the respondent can act on, or null when the
+  // page should show its generic failure message instead.
+  var REJECTION_MESSAGES = {
+    invalid_email: 'Please check your email address.',
+    email_too_long: 'Your email address is too long.',
+    // The answers are stored; only the address was not.
+    email_not_stored:
+      'Thank you! Your answers were saved, but we could not save your ' +
+      'email address.'
+  };
+
+  function rejectionMessage(reason) {
+    return Object.prototype.hasOwnProperty.call(REJECTION_MESSAGES, reason)
+      ? REJECTION_MESSAGES[reason]
+      : null;
+  }
+
   return {
+    rejectionMessage: rejectionMessage,
     MAX_TEXT_CHARS: MAX_TEXT_CHARS,
     isClosed: isClosed,
     overLimitQuestions: overLimitQuestions,

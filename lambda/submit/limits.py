@@ -18,3 +18,6 @@ MAX_TEXT_CHARS = 500
 # submitted: the optional email address (up to 254 characters), the browser
 # token, and the JSON envelope fields the later slices add around the answers.
 RESERVED_BODY_BYTES = 1536
+
+# The optional email address, in Unicode characters, after trimming.
+MAX_EMAIL_CHARS = 254

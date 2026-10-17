@@ -207,3 +207,4 @@ The whole thing runs as one new stack on its own CloudFront distribution at `pol
 - Dependencies between pieces: the polls stack needs the Site stack's web ACL, so the rate rule change and the polls stack deploy together. Treat the exported ACL reference as permanent.
 - Expected running cost is about $1 a month for the rate rule plus cents for compute, storage, logs and queries (prices verified against the Price List API in the pricing research).
 - CloudFront logs arrive up to several times an hour and can lag by up to 24 hours; do not judge logging by the first hour.
+- Size budget (decided 2026-10-17): the request body is capped at 6 KB, with 1.5 KB reserved for the email, browser token and envelope. A poll can therefore hold at most two 500-character free-text questions. This is accepted: little free text is expected, and the simpler limited implementation is preferred over raising the limit.

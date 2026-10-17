@@ -137,3 +137,49 @@ test('a poll without a closing time never counts as closed', () => {
 test('an unreadable closing time is left to the server to enforce', () => {
   assert.equal(lib.isClosed({ id: 'p', closesAt: 'soon' }, CLOSING_MS), false);
 });
+
+test('prepareSubmission adds a trimmed email and signs that exact body', async () => {
+  const { body, headers } = await lib.prepareSubmission(
+    'poll1', { q1: 'a' }, '  reader@example.com  '
+  );
+
+  assert.equal(
+    body,
+    '{"pollId":"poll1","answers":{"q1":"a"},"email":"reader@example.com"}'
+  );
+  // Expected value computed independently with Python hashlib.
+  assert.equal(
+    headers['x-amz-content-sha256'],
+    '244e8f34a554f1f6f0d190e918868b826935891ca2a7d086ae7e0d3bc21643db'
+  );
+});
+
+test('a blank or missing email is left out of the request', async () => {
+  const plain = await lib.prepareSubmission('poll1', { q1: 'a' });
+
+  for (const blank of [undefined, null, '', '   ', '\n\t']) {
+    const prepared = await lib.prepareSubmission('poll1', { q1: 'a' }, blank);
+    assert.equal(prepared.body, plain.body);
+    assert.deepEqual(prepared.headers, plain.headers);
+  }
+});
+
+test('rejectionMessage explains email problems and leaves others generic', () => {
+  assert.equal(
+    lib.rejectionMessage('invalid_email'),
+    'Please check your email address.'
+  );
+  assert.equal(
+    lib.rejectionMessage('email_too_long'),
+    'Your email address is too long.'
+  );
+  assert.equal(lib.rejectionMessage('unknown_option'), null);
+  assert.equal(lib.rejectionMessage(undefined), null);
+});
+
+test('rejectionMessage tells the respondent when only the email was lost', () => {
+  assert.equal(
+    lib.rejectionMessage('email_not_stored'),
+    'Thank you! Your answers were saved, but we could not save your email address.'
+  );
+});

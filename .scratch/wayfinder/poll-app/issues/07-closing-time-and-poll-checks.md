@@ -66,3 +66,7 @@ The owner set `"closesAt": "2020-01-01T00:00:00Z"` in `polls/poll2.json` to chec
 - **Cause:** a flaw in a test written in slice 04, before closing times existed and not revisited in slice 07. It submitted to every poll in the repository at a fixed moment (2026-10-16) and expected acceptance. The server was right to answer 410 `poll_closed`; the test was wrong. As written, any poll that legitimately reached its closing date would have failed the unit gate and blocked every deploy, including unrelated ones.
 - **Fix:** both tests that submit to real poll files now submit while the poll is open (`open_time_for`: one second before `closesAt`, or the fixed time when there is none). Verified with the closed `poll2` still in place: 176 Python tests, 14 Node tests, pylint 10.00, no golden change.
 - **Lesson recorded:** checks over the polls in the repository must not assume a poll is open now; polls closing is the feature.
+
+### Decision (2026-10-17): keep two free-text questions per poll
+
+The owner reviewed the size-budget correction (two 500-character free-text questions fit, three do not) and chose to keep it: little free text is expected, and a limited implementation keeps the project simpler. No change to the 6 KB body limit or the 1.5 KB reservation. Also recorded in the spec's further notes.

@@ -13,11 +13,13 @@ Flow:
 import functools
 import json
 import os
+import re
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
+from botocore.exceptions import ClientError
 
 import limits
 from definitions import parse_closes_at
@@ -27,6 +29,11 @@ _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 # `polls` is a symlink to the repository's poll definitions; CDK follows it
 # when it builds the function bundle, so the deployed folder holds real files.
 BUNDLED_DEFINITIONS_DIR = Path(__file__).parent / "polls"
+
+# Deliberately not a full RFC check, which would reject real addresses and
+# still not prove the mailbox exists: one @, text on both sides, and a dot
+# inside the domain (no empty parts), with no whitespace anywhere.
+_EMAIL_SHAPE = re.compile(r"[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+")
 
 
 def load_definitions(directory):
@@ -169,8 +176,25 @@ def _check_open(definition, submitted):
         raise _Rejected(410, "poll_closed")
 
 
+def _email_from(request):
+    """The trimmed, valid email address, or None when none was given."""
+    if "email" not in request:
+        return None
+    email = request["email"]
+    if not isinstance(email, str):
+        raise _Rejected(400, "invalid_email")
+    email = email.strip()
+    if not email:
+        return None
+    if len(email) > limits.MAX_EMAIL_CHARS:
+        raise _Rejected(400, "email_too_long")
+    if not _EMAIL_SHAPE.fullmatch(email):
+        raise _Rejected(400, "invalid_email")
+    return email
+
+
 def _validated(event, definitions, submitted):
-    """Return (definition, answers) for a valid submission or raise."""
+    """Return (definition, answers, email) for a valid submission or raise."""
     _check_route(event)
     request = _parse_body(event)
     definition = definitions.get(request["pollId"])
@@ -178,7 +202,7 @@ def _validated(event, definitions, submitted):
         raise _Rejected(404, "unknown_poll")
     _check_open(definition, submitted)
     _check_answers(definition, request["answers"])
-    return definition, request["answers"]
+    return definition, request["answers"], _email_from(request)
 
 
 def handle(event, *, table, definitions, now, new_id=None):
@@ -186,7 +210,7 @@ def handle(event, *, table, definitions, now, new_id=None):
     new_id = new_id or _new_response_id
     submitted = now()
     try:
-        definition, answers = _validated(event, definitions, submitted)
+        definition, answers, email = _validated(event, definitions, submitted)
     except _Rejected as rejection:
         return _response(rejection.status, {"reason": rejection.reason})
     response_id = new_id(submitted)
@@ -199,6 +223,20 @@ def handle(event, *, table, definitions, now, new_id=None):
             "pollVersion": definition["version"],
         }
     )
+    if email:
+        # The answers are already stored. If the email cannot be, say so
+        # (the visitor may retry) without losing them or echoing the address.
+        try:
+            table.put_item(
+                Item={
+                    "pk": f"POLL#{definition['id']}",
+                    "sk": f"EMAIL#{response_id}",
+                    "email": email,
+                    "submittedAt": submitted.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                }
+            )
+        except ClientError:
+            return _response(500, {"reason": "email_not_stored"})
     return _response(201, {"responseId": response_id})
 
 

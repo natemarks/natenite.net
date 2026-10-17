@@ -136,6 +136,29 @@
       form.appendChild(renderQuestion(question));
     });
 
+    // Named "respondent-email" so it can never collide with a question ID
+    // (question IDs cannot contain hyphens).
+    var emailBox = document.createElement('p');
+    var emailLabel = document.createElement('label');
+    emailLabel.htmlFor = 'respondent-email';
+    emailLabel.textContent = 'Email (optional)';
+    var emailInput = document.createElement('input');
+    emailInput.type = 'email';
+    emailInput.id = 'respondent-email';
+    emailInput.name = 'respondent-email';
+    emailInput.autocomplete = 'email';
+    emailInput.setAttribute('aria-describedby', 'email-notice');
+    var emailNotice = document.createElement('span');
+    emailNotice.id = 'email-notice';
+    emailNotice.className = 'note';
+    emailNotice.textContent =
+      ' Optional. We keep your address until you ask us to remove it.';
+    emailBox.appendChild(emailLabel);
+    emailBox.appendChild(document.createElement('br'));
+    emailBox.appendChild(emailInput);
+    emailBox.appendChild(emailNotice);
+    form.appendChild(emailBox);
+
     var button = document.createElement('button');
     button.type = 'submit';
     button.textContent = 'Submit';
@@ -160,7 +183,7 @@
       }
       button.disabled = true;
       status.textContent = 'Sending…';
-      PollLib.prepareSubmission(definition.id, answers)
+      PollLib.prepareSubmission(definition.id, answers, emailInput.value)
         .then(function (prepared) {
           return fetch('/submit', {
             method: 'POST',
@@ -173,14 +196,27 @@
             showMessage('This poll is closed.');
             return;
           }
-          if (response.status !== 201) {
-            throw new Error('status ' + response.status);
+          if (response.status === 201) {
+            showMessage('Thank you! Your response was recorded.');
+            return null;
           }
-          showMessage('Thank you! Your response was recorded.');
+          return response.json().catch(function () {
+            return {};
+          }).then(function (data) {
+            var message = PollLib.rejectionMessage(data.reason);
+            if (data.reason === 'email_not_stored') {
+              // The answers are saved: do not invite a duplicate resubmit.
+              showMessage(message);
+              return;
+            }
+            var error = new Error('status ' + response.status);
+            error.userMessage = message;
+            throw error;
+          });
         })
-        .catch(function () {
+        .catch(function (error) {
           button.disabled = false;
-          status.textContent =
+          status.textContent = (error && error.userMessage) ||
             'Sorry, your response could not be sent. Please try again.';
         });
     });

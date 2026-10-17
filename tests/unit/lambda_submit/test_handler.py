@@ -8,9 +8,11 @@ Purpose:
 
 # pylint: disable=duplicate-code
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from botocore.exceptions import ClientError
 
 import handler
 from definitions import parse_closes_at
@@ -622,3 +624,180 @@ def test_a_closed_poll_reports_closed_even_when_the_answers_are_wrong():
     assert response["statusCode"] == 410
     assert reason_of(response) == "poll_closed"
     assert not table.items
+
+
+def with_email(email, answers=None):
+    """A valid poll1 submission carrying an email address."""
+    return {
+        "pollId": "poll1",
+        "answers": answers or {"q1": "a"},
+        "email": email,
+    }
+
+
+@pytest.mark.unit
+def test_a_valid_email_is_stored_as_its_own_record_linked_to_the_response():
+    """The address goes in a separate record that shares the response ID."""
+    response, table = submit(with_email("reader@example.com"))
+
+    assert response["statusCode"] == 201
+    response_id = json.loads(response["body"])["responseId"]
+    assert len(table.items) == 2
+    stored_response, stored_email = table.items
+    assert stored_response["sk"] == f"RESPONSE#{response_id}"
+    assert "email" not in stored_response
+    assert stored_email == {
+        "pk": "POLL#poll1",
+        "sk": f"EMAIL#{response_id}",
+        "email": "reader@example.com",
+        "submittedAt": "2026-10-16T12:00:00Z",
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(
+            {"pollId": "poll1", "answers": {"q1": "a"}}, id="no-field"
+        ),
+        pytest.param(with_email(""), id="empty"),
+        pytest.param(with_email("   "), id="spaces"),
+        pytest.param(with_email("\n\t "), id="newline-and-tab"),
+    ],
+)
+def test_no_email_means_no_email_record(payload):
+    """A missing or blank email stores the response and nothing else."""
+    response, table = submit(payload)
+
+    assert response["statusCode"] == 201
+    assert len(table.items) == 1
+    assert table.items[0]["sk"].startswith("RESPONSE#")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "email",
+    [
+        pytest.param("reader", id="no-at-sign"),
+        pytest.param("reader@", id="nothing-after-the-at-sign"),
+        pytest.param("@example.com", id="nothing-before-the-at-sign"),
+        pytest.param("a@@example.com", id="two-at-signs"),
+        pytest.param("a@b@example.com", id="at-sign-twice-apart"),
+        pytest.param("reader@example", id="no-dot-in-the-domain"),
+        pytest.param("reader@.com", id="domain-starts-with-a-dot"),
+        pytest.param("reader@example.", id="domain-ends-with-a-dot"),
+        pytest.param("reader@example..com", id="two-dots-in-a-row"),
+        pytest.param("reader@example.com.", id="trailing-dot-after-the-tld"),
+        pytest.param("read er@example.com", id="space-inside"),
+        pytest.param("reader@exa mple.com", id="space-in-the-domain"),
+        pytest.param("reader\n@example.com", id="newline-inside"),
+        pytest.param(5, id="number"),
+        pytest.param(None, id="null"),
+        pytest.param(True, id="true"),
+        pytest.param(["reader@example.com"], id="list"),
+        pytest.param({"address": "reader@example.com"}, id="object"),
+    ],
+)
+def test_a_malformed_email_is_rejected_and_nothing_is_stored(email):
+    """An address that is not shaped like one is `invalid_email`."""
+    response, table = submit(with_email(email))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "invalid_email"
+    assert not table.items
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "email",
+    [
+        pytest.param("reader@example.com", id="plain"),
+        pytest.param(
+            "first.last+tag@sub.example.co.uk", id="dots-plus-subdomain"
+        ),
+        pytest.param("  reader@example.com  ", id="surrounding-spaces"),
+        pytest.param("Reader@Example.COM", id="mixed-case"),
+        pytest.param("réader@exämple.com", id="non-ascii-letters"),
+    ],
+)
+def test_ordinary_addresses_are_accepted(email):
+    """Real-world shapes pass; surrounding spaces are trimmed, case kept."""
+    response, table = submit(with_email(email))
+
+    assert response["statusCode"] == 201
+    assert table.items[1]["email"] == email.strip()
+
+
+def address_of_length(length):
+    """A well-shaped address with exactly `length` characters."""
+    domain = "@example.com"
+    return "a" * (length - len(domain)) + domain
+
+
+@pytest.mark.unit
+def test_an_email_is_capped_at_254_characters():
+    """254 characters fit; spaces around the address are not counted."""
+    for typed in (address_of_length(254), f"  {address_of_length(254)}  "):
+        response, table = submit(with_email(typed))
+        assert response["statusCode"] == 201
+        assert table.items[1]["email"] == address_of_length(254)
+
+    response, table = submit(with_email(address_of_length(255)))
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "email_too_long"
+    assert not table.items
+
+
+@pytest.mark.unit
+def test_an_overlong_email_is_reported_as_too_long_not_malformed():
+    """Length is checked first, so a huge junk string says too long."""
+    response, table = submit(with_email("x" * 5000))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "email_too_long"
+    assert not table.items
+
+
+class EmailWritesFail(FakeTable):  # pylint: disable=too-few-public-methods
+    """A table whose writes of email records fail, as a real one can."""
+
+    def put_item(self, Item):  # pylint: disable=invalid-name
+        """Fail for email records, store everything else."""
+        if Item["sk"].startswith("EMAIL#"):
+            error = {"Error": {"Code": "InternalServerError", "Message": "x"}}
+            raise ClientError(error, "PutItem")
+        super().put_item(Item=Item)
+
+
+@pytest.mark.unit
+def test_a_failed_email_write_keeps_the_answers_and_reports_an_error():
+    """The answers are the primary data: they stay, and the visitor is told."""
+    address = "reader@example.com"
+    response, table = submit(with_email(address), table=EmailWritesFail())
+
+    assert response["statusCode"] == 500
+    assert reason_of(response) == "email_not_stored"
+    assert len(table.items) == 1
+    assert table.items[0]["sk"].startswith("RESPONSE#")
+    assert address not in response["body"]
+
+
+@pytest.mark.unit
+def test_an_email_address_never_reaches_logs_or_other_output(caplog, capsys):
+    """Accepted, rejected and failed submissions leave no address behind."""
+    caplog.set_level(logging.DEBUG)
+    good = "needle.reader@example.com"
+    bad = "needle.invalid@@example.com"
+    too_long = "needle" + "x" * 300 + "@example.com"
+
+    bodies = [
+        submit(with_email(good))[0]["body"],
+        submit(with_email(bad))[0]["body"],
+        submit(with_email(too_long))[0]["body"],
+        submit(with_email(good), table=EmailWritesFail())[0]["body"],
+    ]
+
+    out, err = capsys.readouterr()
+    everything = caplog.text + out + err + "".join(bodies)
+    assert "needle" not in everything

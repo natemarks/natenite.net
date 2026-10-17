@@ -238,6 +238,22 @@ dump-poll: .venv ## print one poll's responses as JSON (make dump-poll poll=poll
        PYTHONPATH="." python3 scripts/dump_poll.py $(poll) --app-env $(app_env); \
     )
 
+purge-emails: .venv ## report emails older than N days; add yes=1 to delete them (make purge-emails days=365)
+	( \
+       source scripts/enable_pyenv.sh; \
+       pyenv local $(PYTHON_VERSION); \
+       source .venv/bin/activate; \
+       PYTHONPATH="." python3 scripts/manage_emails.py --app-env $(app_env) purge --older-than-days $(days) $(if $(yes),--yes,); \
+    )
+
+delete-email: .venv ## report records for one address; add yes=1 to delete them (make delete-email email=a@b.co)
+	( \
+       source scripts/enable_pyenv.sh; \
+       pyenv local $(PYTHON_VERSION); \
+       source .venv/bin/activate; \
+       PYTHONPATH="." python3 scripts/manage_emails.py --app-env $(app_env) delete --email '$(email)' $(if $(yes),--yes,); \
+    )
+
 discover: .venv ## update environment config data with discovered information
 	( \
        source scripts/enable_pyenv.sh; \
