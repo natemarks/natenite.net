@@ -20,6 +20,7 @@ from pathlib import Path
 import boto3
 
 import limits
+from definitions import parse_closes_at
 
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -159,13 +160,23 @@ def _check_answers(definition, answers):
         _ANSWER_CHECKS[question["type"]](question, answers[question["id"]])
 
 
-def _validated(event, definitions):
+def _check_open(definition, submitted):
+    """A poll with a closing time stops taking responses at that instant."""
+    closes_at = definition.get("closesAt")
+    if closes_at is None:
+        return
+    if submitted >= parse_closes_at(closes_at):
+        raise _Rejected(410, "poll_closed")
+
+
+def _validated(event, definitions, submitted):
     """Return (definition, answers) for a valid submission or raise."""
     _check_route(event)
     request = _parse_body(event)
     definition = definitions.get(request["pollId"])
     if definition is None:
         raise _Rejected(404, "unknown_poll")
+    _check_open(definition, submitted)
     _check_answers(definition, request["answers"])
     return definition, request["answers"]
 
@@ -173,11 +184,11 @@ def _validated(event, definitions):
 def handle(event, *, table, definitions, now, new_id=None):
     """Process one Function URL event and return the HTTP response."""
     new_id = new_id or _new_response_id
+    submitted = now()
     try:
-        definition, answers = _validated(event, definitions)
+        definition, answers = _validated(event, definitions, submitted)
     except _Rejected as rejection:
         return _response(rejection.status, {"reason": rejection.reason})
-    submitted = now()
     response_id = new_id(submitted)
     table.put_item(
         Item={

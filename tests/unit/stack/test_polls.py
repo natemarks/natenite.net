@@ -310,10 +310,10 @@ def test_cloudfront_may_invoke_the_function(action):
 
 
 @pytest.mark.unit
-def test_function_bundle_holds_only_the_handler_limits_and_every_definition(
+def test_function_bundle_holds_only_the_modules_and_every_definition(
     tmp_path,
 ):
-    """The deployed bundle has real definition files and no stray caches."""
+    """The deployed bundle has the modules, real definition files, no caches."""
     stack = build_polls_stack(outdir=tmp_path)
     template = assertions.Template.from_stack(stack).to_json()
     function = next(
@@ -335,5 +335,6 @@ def test_function_bundle_holds_only_the_handler_limits_and_every_definition(
         f"polls/{path.name}"
         for path in (PROJECT_ROOT / "polls").glob("*.json")
     }
-    assert files == {"handler.py", "limits.py"} | definitions
+    modules = {"handler.py", "limits.py", "definitions.py"}
+    assert files == modules | definitions
     assert not (asset_dir / "polls").is_symlink()

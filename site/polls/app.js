@@ -117,6 +117,12 @@
     document.title = definition.title;
     root.textContent = '';
 
+    // The visitor's clock only decides what to show; the server enforces it.
+    if (PollLib.isClosed(definition, Date.now())) {
+      showMessage('This poll is closed.');
+      return;
+    }
+
     var heading = document.createElement('h1');
     heading.textContent = definition.title;
     root.appendChild(heading);
@@ -163,6 +169,10 @@
           });
         })
         .then(function (response) {
+          if (response.status === 410) {
+            showMessage('This poll is closed.');
+            return;
+          }
           if (response.status !== 201) {
             throw new Error('status ' + response.status);
           }

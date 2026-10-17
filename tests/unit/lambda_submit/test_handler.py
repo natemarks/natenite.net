@@ -6,12 +6,14 @@ Purpose:
 - No AWS credentials are needed.
 """
 
+# pylint: disable=duplicate-code
 import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 import handler
+from definitions import parse_closes_at
 
 NOW = datetime(2026, 10, 16, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -67,6 +69,9 @@ MIXED_POLL = {
     ],
 }
 DEFINITIONS["poll2"] = MIXED_POLL
+DEFINITIONS["closing"] = dict(
+    DEFINITIONS["poll1"], id="closing", closesAt="2026-10-16T12:00:00Z"
+)
 
 
 class FakeTable:  # pylint: disable=too-few-public-methods
@@ -304,7 +309,7 @@ def test_bundled_definitions_accept_a_valid_submission():
         post_event({"pollId": "poll1", "answers": answers}),
         table=table,
         definitions=definitions,
-        now=lambda: NOW,
+        now=lambda: open_time_for(poll),
     )
 
     assert response["statusCode"] == 201
@@ -438,6 +443,18 @@ def test_a_rating_must_be_a_whole_number(value):
     assert not table.items
 
 
+def open_time_for(poll):
+    """A moment when the poll is open: just before it closes, if it does.
+
+    Polls close for real, so checks that submit to the polls in the
+    repository must not assume they are still open at a fixed time.
+    """
+    closes_at = poll.get("closesAt")
+    if closes_at is None:
+        return NOW
+    return parse_closes_at(closes_at) - timedelta(seconds=1)
+
+
 def valid_answers_for(poll):
     """One valid answer per question, built from the question's own shape."""
     answers = {}
@@ -472,7 +489,7 @@ def test_every_bundled_poll_accepts_a_valid_submission(poll_id):
         ),
         table=table,
         definitions=definitions,
-        now=lambda: NOW,
+        now=lambda: open_time_for(definitions[poll_id]),
     )
 
     assert response["statusCode"] == 201
@@ -546,4 +563,62 @@ def test_free_text_must_be_a_string(value):
 
     assert response["statusCode"] == 400
     assert reason_of(response) == "invalid_answer"
+    assert not table.items
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "offset",
+    [
+        pytest.param(timedelta(0), id="at-the-closing-instant"),
+        pytest.param(timedelta(seconds=1), id="one-second-after"),
+        pytest.param(timedelta(days=30), id="long-after"),
+    ],
+)
+def test_a_poll_closed_at_its_closing_time_answers_410(offset):
+    """From the closing instant on, the poll is gone (HTTP 410)."""
+    response, table = submit(
+        {"pollId": "closing", "answers": {"q1": "a"}}, now=NOW + offset
+    )
+
+    assert response["statusCode"] == 410
+    assert reason_of(response) == "poll_closed"
+    assert not table.items
+
+
+@pytest.mark.unit
+def test_a_submission_just_before_the_closing_time_is_accepted():
+    """One second before the closing instant the poll is still open."""
+    response, table = submit(
+        {"pollId": "closing", "answers": {"q1": "a"}},
+        now=NOW - timedelta(seconds=1),
+    )
+
+    assert response["statusCode"] == 201
+    assert len(table.items) == 1
+
+
+@pytest.mark.unit
+def test_a_poll_without_a_closing_time_never_closes():
+    """No `closesAt` means the poll stays open indefinitely."""
+    far_future = datetime(2100, 1, 1, tzinfo=timezone.utc)
+
+    response, table = submit(
+        {"pollId": "poll1", "answers": {"q1": "a"}}, now=far_future
+    )
+
+    assert response["statusCode"] == 201
+    assert len(table.items) == 1
+
+
+@pytest.mark.unit
+def test_a_closed_poll_reports_closed_even_when_the_answers_are_wrong():
+    """The closing check comes before the answer checks."""
+    response, table = submit(
+        {"pollId": "closing", "answers": {"q1": "zzz"}},
+        now=NOW + timedelta(hours=1),
+    )
+
+    assert response["statusCode"] == 410
+    assert reason_of(response) == "poll_closed"
     assert not table.items

@@ -118,3 +118,22 @@ test('overLimitQuestions names text answers longer than the limit', () => {
   assert.deepEqual(lib.overLimitQuestions(questions, { q5: '😀'.repeat(500) }), []);
   assert.deepEqual(lib.overLimitQuestions(questions, { q5: '😀'.repeat(501) }), ['q5']);
 });
+
+const CLOSING = '2026-10-16T12:00:00Z';
+const CLOSING_MS = Date.parse(CLOSING);
+
+test('isClosed is true from the closing instant on, using the given time', () => {
+  const poll = { id: 'p', closesAt: CLOSING };
+
+  assert.equal(lib.isClosed(poll, CLOSING_MS - 1000), false);
+  assert.equal(lib.isClosed(poll, CLOSING_MS), true);
+  assert.equal(lib.isClosed(poll, CLOSING_MS + 1000), true);
+});
+
+test('a poll without a closing time never counts as closed', () => {
+  assert.equal(lib.isClosed({ id: 'p' }, CLOSING_MS * 2), false);
+});
+
+test('an unreadable closing time is left to the server to enforce', () => {
+  assert.equal(lib.isClosed({ id: 'p', closesAt: 'soon' }, CLOSING_MS), false);
+});

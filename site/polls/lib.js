@@ -81,8 +81,20 @@
       .map(function (question) { return question.id; });
   }
 
+  // True when the poll has a closing time that has passed. `nowMs` is passed
+  // in so the clock can be controlled in tests. This only chooses what the
+  // page shows: the server decides whether a submission is accepted.
+  function isClosed(definition, nowMs) {
+    if (!definition.closesAt) {
+      return false;
+    }
+    var closing = Date.parse(definition.closesAt);
+    return !Number.isNaN(closing) && nowMs >= closing;
+  }
+
   return {
     MAX_TEXT_CHARS: MAX_TEXT_CHARS,
+    isClosed: isClosed,
     overLimitQuestions: overLimitQuestions,
     textLength: textLength,
     charactersLeft: charactersLeft,
