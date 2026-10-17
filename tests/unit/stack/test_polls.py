@@ -581,6 +581,8 @@ def test_the_distribution_delivers_json_access_logs_to_the_log_bucket():
         "Fn::GetAtt": [destination_id, "Arn"]
     }
     assert props["S3EnableHiveCompatiblePath"] is True
+    # Hive paths only apply to the variables of an explicit suffix path
+    assert props["S3SuffixPath"] == "{yyyy}/{MM}/{dd}/{HH}"
 
 
 @pytest.mark.unit

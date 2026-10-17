@@ -795,7 +795,8 @@
         "DeliverySourceName": {
           "Ref": "NateNiteProductionPollsAccessLogSource"
         },
-        "S3EnableHiveCompatiblePath": true
+        "S3EnableHiveCompatiblePath": true,
+        "S3SuffixPath": "{yyyy}/{MM}/{dd}/{HH}"
       },
       "DependsOn": [
         "NateNiteProductionPollsAccessLogBucketPolicyFCDAF0DD"

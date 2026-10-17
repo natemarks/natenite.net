@@ -174,6 +174,7 @@ class PollsStack(Stack):
             delivery_source_name=source.ref,
             delivery_destination_arn=destination.attr_arn,
             s3_enable_hive_compatible_path=True,
+            s3_suffix_path="{yyyy}/{MM}/{dd}/{HH}",
         )
         # Creating a delivery checks it can write, so the policy comes first
         delivery.node.add_dependency(bucket.policy)
