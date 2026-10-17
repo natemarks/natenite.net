@@ -72,3 +72,49 @@ test('a rating of zero is an answer, not a missing one', () => {
     []
   );
 });
+
+test('textLength counts Unicode characters, as the server does', () => {
+  assert.equal(lib.textLength('abc'), 3);
+  assert.equal(lib.textLength('café'), 4);
+  // Outside the BMP: two UTF-16 units in JavaScript, one character.
+  assert.equal('😀'.length, 2);
+  assert.equal(lib.textLength('😀😀'), 2);
+  assert.equal(lib.textLength(''), 0);
+});
+
+test('charactersLeft counts down from the 500 character limit', () => {
+  assert.equal(lib.charactersLeft(''), 500);
+  assert.equal(lib.charactersLeft('abc'), 497);
+  assert.equal(lib.charactersLeft('x'.repeat(500)), 0);
+  assert.equal(lib.charactersLeft('x'.repeat(501)), -1);
+  assert.equal(lib.charactersLeft('😀'.repeat(500)), 0);
+});
+
+const TEXT_QUESTIONS = [{ id: 'q4', type: 'text' }];
+
+test('a blank or whitespace-only text answer counts as unanswered', () => {
+  assert.deepEqual(lib.missingQuestions(TEXT_QUESTIONS, {}), ['q4']);
+  assert.deepEqual(lib.missingQuestions(TEXT_QUESTIONS, { q4: '' }), ['q4']);
+  assert.deepEqual(lib.missingQuestions(TEXT_QUESTIONS, { q4: ' \n\t ' }), ['q4']);
+  assert.deepEqual(lib.missingQuestions(TEXT_QUESTIONS, { q4: ' hi ' }), []);
+});
+
+test('overLimitQuestions names text answers longer than the limit', () => {
+  const questions = [
+    { id: 'q1', type: 'single' },
+    { id: 'q4', type: 'text' },
+    { id: 'q5', type: 'text' }
+  ];
+
+  assert.deepEqual(
+    lib.overLimitQuestions(questions, { q1: 'a', q4: 'x'.repeat(500) }),
+    []
+  );
+  assert.deepEqual(
+    lib.overLimitQuestions(questions, { q4: 'x'.repeat(501), q5: 'ok' }),
+    ['q4']
+  );
+  // 500 emoji are 1000 UTF-16 units but only 500 characters: within the limit.
+  assert.deepEqual(lib.overLimitQuestions(questions, { q5: '😀'.repeat(500) }), []);
+  assert.deepEqual(lib.overLimitQuestions(questions, { q5: '😀'.repeat(501) }), ['q5']);
+});

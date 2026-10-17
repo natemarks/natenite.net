@@ -45,7 +45,44 @@
     return options;
   }
 
+  function counterText(left) {
+    return left >= 0
+      ? left + ' characters left'
+      : -left + ' characters over the limit';
+  }
+
+  function renderText(question) {
+    var fieldset = document.createElement('fieldset');
+    var legend = document.createElement('legend');
+    legend.textContent = question.prompt;
+    fieldset.appendChild(legend);
+
+    var textarea = document.createElement('textarea');
+    textarea.name = question.id;
+    textarea.rows = 4;
+    var counter = document.createElement('p');
+    counter.className = 'note';
+    counter.id = 'count-' + question.id;
+    counter.setAttribute('aria-live', 'polite');
+    textarea.setAttribute('aria-describedby', counter.id);
+
+    function update() {
+      var left = PollLib.charactersLeft(textarea.value);
+      counter.textContent = counterText(left);
+      counter.classList.toggle('over', left < 0);
+    }
+    textarea.addEventListener('input', update);
+    update();
+
+    fieldset.appendChild(textarea);
+    fieldset.appendChild(counter);
+    return fieldset;
+  }
+
   function renderQuestion(question) {
+    if (question.type === 'text') {
+      return renderText(question);
+    }
     if (question.type === 'multi') {
       return renderChoices(question, 'checkbox', question.options);
     }
@@ -63,7 +100,9 @@
       var checked = Array.prototype.filter.call(form.elements, function (el) {
         return el.name === question.id && el.checked;
       });
-      if (question.type === 'multi') {
+      if (question.type === 'text') {
+        answers[question.id] = form.elements.namedItem(question.id).value;
+      } else if (question.type === 'multi') {
         answers[question.id] = checked.map(function (el) { return el.value; });
       } else if (checked.length) {
         answers[question.id] = question.type === 'rating'
@@ -83,7 +122,7 @@
     root.appendChild(heading);
 
     var questions = definition.questions.filter(function (question) {
-      return ['single', 'multi', 'rating'].indexOf(question.type) !== -1;
+      return ['single', 'multi', 'rating', 'text'].indexOf(question.type) !== -1;
     });
 
     var form = document.createElement('form');
@@ -106,6 +145,11 @@
       var answers = readAnswers(form, questions);
       if (PollLib.missingQuestions(questions, answers).length) {
         status.textContent = 'Please answer every question.';
+        return;
+      }
+      if (PollLib.overLimitQuestions(questions, answers).length) {
+        status.textContent = 'Please shorten your answer: the limit is ' +
+          PollLib.MAX_TEXT_CHARS + ' characters.';
         return;
       }
       button.disabled = true;

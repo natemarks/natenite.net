@@ -34,3 +34,21 @@ label {
 .note {
   opacity: 0.7;
 }
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.over {
+  color: #b00020;
+  opacity: 1;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .over {
+    color: #ff8a80;
+  }
+}

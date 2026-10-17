@@ -47,12 +47,45 @@
         if (question.type === 'rating') {
           return typeof answer !== 'number';
         }
+        if (question.type === 'text') {
+          return typeof answer !== 'string' || answer.trim() === '';
+        }
         return typeof answer !== 'string' || answer === '';
       })
       .map(function (question) { return question.id; });
   }
 
+  // The free-text limit, in Unicode characters. The submit function keeps the
+  // authoritative copy; a unit test fails if the two numbers differ.
+  var MAX_TEXT_CHARS = 500;
+
+  // Characters as the server counts them (code points), not UTF-16 units:
+  // an emoji is two units in JavaScript but one character.
+  function textLength(text) {
+    return Array.from(text).length;
+  }
+
+  function charactersLeft(text) {
+    return MAX_TEXT_CHARS - textLength(text);
+  }
+
+  // IDs of the text questions whose answer is longer than the limit.
+  function overLimitQuestions(questions, answers) {
+    return questions
+      .filter(function (question) {
+        var answer = answers[question.id];
+        return question.type === 'text' &&
+          typeof answer === 'string' &&
+          textLength(answer) > MAX_TEXT_CHARS;
+      })
+      .map(function (question) { return question.id; });
+  }
+
   return {
+    MAX_TEXT_CHARS: MAX_TEXT_CHARS,
+    overLimitQuestions: overLimitQuestions,
+    textLength: textLength,
+    charactersLeft: charactersLeft,
     sha256Hex: sha256Hex,
     prepareSubmission: prepareSubmission,
     missingQuestions: missingQuestions

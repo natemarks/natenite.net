@@ -63,6 +63,7 @@ MIXED_POLL = {
             "min": 1,
             "max": 5,
         },
+        {"id": "q4", "type": "text", "prompt": "Anything else?"},
     ],
 }
 DEFINITIONS["poll2"] = MIXED_POLL
@@ -81,7 +82,13 @@ class FakeTable:  # pylint: disable=too-few-public-methods
 
 def post_event(payload, method="POST", path="/submit"):
     """Build a Function URL (payload v2) event carrying a JSON body."""
-    body = payload if isinstance(payload, str) else json.dumps(payload)
+    # ensure_ascii=False matches a browser's JSON.stringify, which does not
+    # escape non-ASCII characters.
+    body = (
+        payload
+        if isinstance(payload, str)
+        else json.dumps(payload, ensure_ascii=False)
+    )
     return {
         "version": "2.0",
         "rawPath": path,
@@ -310,7 +317,7 @@ def test_multiple_choice_and_rating_answers_are_stored_in_their_shapes():
     response, table = submit(
         {
             "pollId": "poll2",
-            "answers": {"q1": "a", "q2": ["x", "z"], "q3": 4},
+            "answers": {"q1": "a", "q2": ["x", "z"], "q3": 4, "q4": "Ok"},
         }
     )
 
@@ -319,12 +326,13 @@ def test_multiple_choice_and_rating_answers_are_stored_in_their_shapes():
         "q1": "a",
         "q2": ["x", "z"],
         "q3": 4,
+        "q4": "Ok",
     }
 
 
 def mixed_answers(**overrides):
     """A valid answer set for the mixed poll, with some answers replaced."""
-    answers = {"q1": "a", "q2": ["x"], "q3": 3}
+    answers = {"q1": "a", "q2": ["x"], "q3": 3, "q4": "Hello"}
     answers.update(overrides)
     return {"pollId": "poll2", "answers": answers}
 
@@ -438,6 +446,8 @@ def valid_answers_for(poll):
             answers[question["id"]] = [question["options"][0]["id"]]
         elif question["type"] == "rating":
             answers[question["id"]] = question["min"]
+        elif question["type"] == "text":
+            answers[question["id"]] = "A short free-text answer"
         else:
             answers[question["id"]] = question["options"][0]["id"]
     return answers
@@ -467,3 +477,73 @@ def test_every_bundled_poll_accepts_a_valid_submission(poll_id):
 
     assert response["statusCode"] == 201
     assert len(table.items) == 1
+
+
+@pytest.mark.unit
+def test_free_text_is_stored_exactly_as_typed():
+    """Nothing is trimmed or changed in a free-text answer."""
+    typed = "  two lines\nof text  "
+
+    response, table = submit(mixed_answers(q4=typed))
+
+    assert response["statusCode"] == 201
+    assert table.items[0]["answers"]["q4"] == typed
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "blank",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("   ", id="spaces"),
+        pytest.param("\n\t \r\n", id="newlines-and-tabs"),
+    ],
+)
+def test_a_blank_free_text_answer_counts_as_unanswered(blank):
+    """Free text is required, and whitespace alone is not an answer."""
+    response, table = submit(mixed_answers(q4=blank))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "missing_answer"
+    assert not table.items
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "character",
+    [
+        pytest.param("x", id="ascii"),
+        pytest.param("é", id="two-byte-character"),
+        pytest.param("\U0001f600", id="emoji-outside-the-bmp"),
+    ],
+)
+def test_free_text_is_capped_at_500_characters(character):
+    """500 characters are accepted and 501 are not, whatever their bytes."""
+    response, table = submit(mixed_answers(q4=character * 500))
+    assert response["statusCode"] == 201
+    assert len(table.items) == 1
+
+    response, table = submit(mixed_answers(q4=character * 501))
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "answer_too_long"
+    assert not table.items
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(5, id="number"),
+        pytest.param(None, id="null"),
+        pytest.param(["hello"], id="list"),
+        pytest.param({"text": "hello"}, id="object"),
+        pytest.param(True, id="true"),
+    ],
+)
+def test_free_text_must_be_a_string(value):
+    """Anything other than a string is an invalid answer."""
+    response, table = submit(mixed_answers(q4=value))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "invalid_answer"
+    assert not table.items

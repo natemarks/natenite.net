@@ -130,10 +130,21 @@ def _check_rating(question, value):
         raise _Rejected(400, "rating_out_of_range")
 
 
+def _check_text(_question, value):
+    """A free-text answer is a non-blank string within the length cap."""
+    if not isinstance(value, str):
+        raise _Rejected(400, "invalid_answer")
+    if not value.strip():
+        raise _Rejected(400, "missing_answer")
+    if len(value) > limits.MAX_TEXT_CHARS:
+        raise _Rejected(400, "answer_too_long")
+
+
 _ANSWER_CHECKS = {
     "single": _check_single,
     "multi": _check_multi,
     "rating": _check_rating,
+    "text": _check_text,
 }
 
 
