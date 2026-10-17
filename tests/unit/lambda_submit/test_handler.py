@@ -6,7 +6,7 @@ Purpose:
 - No AWS credentials are needed.
 """
 
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code,too-many-lines
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -879,3 +879,268 @@ def test_a_malformed_token_is_rejected_and_nothing_is_stored(token):
     assert response["statusCode"] == 400
     assert reason_of(response) == "invalid_token"
     assert not table.items
+
+
+def log_lines(capsys):
+    """The JSON log lines the function printed, parsed (one per line)."""
+    out = capsys.readouterr().out
+    return [json.loads(line) for line in out.splitlines() if line.strip()]
+
+
+@pytest.mark.unit
+def test_an_accepted_submission_logs_one_structured_line(capsys):
+    """One JSON line: what happened, to which poll, how big, no content."""
+    payload = {"pollId": "poll1", "answers": {"q1": "a"}}
+    response, _ = submit(payload)
+
+    lines = log_lines(capsys)
+
+    assert len(lines) == 1
+    assert lines[0] == {
+        "level": "INFO",
+        "event": "submission",
+        "outcome": "accepted",
+        "status": 201,
+        "pollId": "poll1",
+        "responseId": json.loads(response["body"])["responseId"],
+        "hasEmail": False,
+        "hasBrowserToken": False,
+        "bodyBytes": len(json.dumps(payload).encode("utf-8")),
+        "at": "2026-10-16T12:00:00Z",
+        "requestId": None,
+        "cloudfrontRequestId": None,
+    }
+
+
+REJECTIONS = [
+    pytest.param(
+        {"payload": {"pollId": "poll1", "answers": {"q1": "zzz"}}},
+        400,
+        "unknown_option",
+        "poll1",
+        id="bad-answer-on-a-real-poll",
+    ),
+    pytest.param(
+        {"payload": "not json{"},
+        400,
+        "invalid_json",
+        None,
+        id="unparseable-json",
+    ),
+    pytest.param(
+        {"payload": {"pollId": "nope", "answers": {"q1": "a"}}},
+        404,
+        "unknown_poll",
+        None,
+        id="unknown-poll",
+    ),
+    pytest.param(
+        {"payload": {"pollId": "poll1\nFAKE-LINE", "answers": {"q1": "a"}}},
+        404,
+        "unknown_poll",
+        None,
+        id="hostile-poll-id",
+    ),
+    pytest.param(
+        {
+            "payload": {"pollId": "closing", "answers": {"q1": "a"}},
+            "now": NOW + timedelta(days=1),
+        },
+        410,
+        "poll_closed",
+        "closing",
+        id="closed-poll",
+    ),
+    pytest.param(
+        {
+            "payload": {"pollId": "poll1", "answers": {"q1": "a"}},
+            "method": "GET",
+        },
+        405,
+        "method_not_allowed",
+        None,
+        id="wrong-method",
+    ),
+    pytest.param(
+        {
+            "payload": {"pollId": "poll1", "answers": {"q1": "a"}},
+            "path": "/other",
+        },
+        404,
+        "not_found",
+        None,
+        id="wrong-path",
+    ),
+]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("call, status, reason, poll_id", REJECTIONS)
+def test_a_rejection_logs_one_warning_with_its_reason(
+    capsys, call, status, reason, poll_id
+):
+    """Each rejected request leaves one WARN line; nothing is injected."""
+    response, _ = submit(**call)
+
+    lines = log_lines(capsys)
+
+    assert response["statusCode"] == status
+    assert len(lines) == 1
+    assert lines[0]["level"] == "WARN"
+    assert lines[0]["outcome"] == "rejected"
+    assert lines[0]["status"] == status
+    assert lines[0]["reason"] == reason
+    assert lines[0]["pollId"] == poll_id
+    assert lines[0]["responseId"] is None
+
+
+@pytest.mark.unit
+def test_an_oversize_body_is_logged_by_size_not_content(capsys):
+    """The size is recorded; the body itself never is."""
+    body = padded_body(6145)
+
+    submit(body)
+
+    (line,) = log_lines(capsys)
+    assert line["reason"] == "payload_too_large"
+    assert line["bodyBytes"] == 6145
+    assert line["pollId"] is None
+
+
+@pytest.mark.unit
+def test_a_lost_email_logs_an_error_but_still_names_the_saved_response(capsys):
+    """Answers saved, email not: an ERROR line that points at the response."""
+    submit(with_email("reader@example.com"), table=EmailWritesFail())
+
+    (line,) = log_lines(capsys)
+
+    assert line["level"] == "ERROR"
+    assert line["outcome"] == "error"
+    assert line["status"] == 500
+    assert line["reason"] == "email_not_stored"
+    assert line["pollId"] == "poll1"
+    assert line["responseId"]
+    assert line["hasEmail"] is True
+    assert "reader@example.com" not in json.dumps(line)
+
+
+class TableDown(FakeTable):  # pylint: disable=too-few-public-methods
+    """A table that fails every write with the given error."""
+
+    def __init__(self, error):
+        super().__init__()
+        self.error = error
+
+    def put_item(self, Item):  # pylint: disable=invalid-name
+        """Always fail."""
+        raise self.error
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "error, error_type, error_code",
+    [
+        pytest.param(
+            ClientError(
+                {
+                    "Error": {
+                        "Code": "ProvisionedThroughputExceededException",
+                        "Message": "needle-in-aws-message for table X",
+                    }
+                },
+                "PutItem",
+            ),
+            "ClientError",
+            "ProvisionedThroughputExceededException",
+            id="aws-error",
+        ),
+        pytest.param(
+            RuntimeError("needle-in-runtime-message"),
+            "RuntimeError",
+            None,
+            id="unexpected-error",
+        ),
+    ],
+)
+def test_an_unexpected_failure_is_a_clean_500_and_logs_only_the_error_kind(
+    capsys, error, error_type, error_code
+):
+    """The visitor gets JSON, the log gets the error type: never the message."""
+    response, _ = submit(
+        {"pollId": "poll1", "answers": {"q1": "a"}}, table=TableDown(error)
+    )
+
+    out = capsys.readouterr().out
+    (line,) = [json.loads(x) for x in out.splitlines() if x.strip()]
+
+    assert response["statusCode"] == 500
+    assert reason_of(response) == "internal_error"
+    assert line["level"] == "ERROR"
+    assert line["outcome"] == "error"
+    assert line["status"] == 500
+    assert line["reason"] == "internal_error"
+    assert line["errorType"] == error_type
+    assert line.get("errorCode") == error_code
+    assert line["pollId"] == "poll1"
+    assert line["responseId"] is None
+    assert "needle" not in out + response["body"]
+
+
+@pytest.mark.unit
+def test_request_ids_and_yes_no_flags_pass_through(capsys):
+    """Both request IDs are recorded, and the flags say what was sent."""
+    event = post_event(with_token(TOKEN, email="reader@example.com"))
+    event["headers"]["x-amz-cf-id"] = "cf-request-id-123"
+
+    handler.handle(
+        event,
+        table=FakeTable(),
+        definitions=DEFINITIONS,
+        now=lambda: NOW,
+        request_id="lambda-request-id-456",
+    )
+
+    (line,) = log_lines(capsys)
+    assert line["requestId"] == "lambda-request-id-456"
+    assert line["cloudfrontRequestId"] == "cf-request-id-123"
+    assert line["hasEmail"] is True
+    assert line["hasBrowserToken"] is True
+    assert "reader@example.com" not in json.dumps(line)
+    assert TOKEN not in json.dumps(line)
+    assert TOKEN_HASH not in json.dumps(line)
+
+
+@pytest.mark.unit
+def test_no_line_contains_content_and_each_request_logs_exactly_one(capsys):
+    """Answers, email, token and hash never appear, whatever the outcome."""
+    secret_text = "needle-answer-text"
+    secret_email = "needle.reader@example.com"
+    requests = [
+        mixed_answers(q4=secret_text)
+        | {"email": secret_email, "browserToken": TOKEN},
+        mixed_answers(q4=secret_text, q1="zzz") | {"email": secret_email},
+        mixed_answers(q4=secret_text) | {"email": "needle@@bad"},
+        mixed_answers(q4="needle" * 200) | {"email": secret_email},
+        {
+            "pollId": "poll2",
+            "answers": {"q4": secret_text},
+            "browserToken": TOKEN,
+        },
+    ]
+    for body in requests:
+        submit(body)
+    submit(
+        mixed_answers(q4=secret_text) | {"email": secret_email},
+        table=EmailWritesFail(),
+    )
+    submit(
+        mixed_answers(q4=secret_text),
+        table=TableDown(RuntimeError("needle-in-runtime")),
+    )
+
+    out = capsys.readouterr().out
+    lines = [json.loads(x) for x in out.splitlines() if x.strip()]
+    assert len(lines) == len(requests) + 2
+    assert "needle" not in out
+    assert TOKEN not in out
+    assert TOKEN_HASH not in out

@@ -238,6 +238,62 @@
       "UpdateReplacePolicy": "Retain",
       "DeletionPolicy": "Retain"
     },
+    "NateNiteProductionPollsSubmitLogGroup5C4BB9CB": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "RetentionInDays": 365
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "NateNiteProductionPollsQueryRejectionsByReason": {
+      "Type": "AWS::Logs::QueryDefinition",
+      "Properties": {
+        "LogGroupNames": [
+          {
+            "Ref": "NateNiteProductionPollsSubmitLogGroup5C4BB9CB"
+          }
+        ],
+        "Name": "polls/rejections-by-reason",
+        "QueryString": "filter outcome = \"rejected\"\n| stats count(*) as rejected by reason\n| sort rejected desc"
+      }
+    },
+    "NateNiteProductionPollsQueryErrors": {
+      "Type": "AWS::Logs::QueryDefinition",
+      "Properties": {
+        "LogGroupNames": [
+          {
+            "Ref": "NateNiteProductionPollsSubmitLogGroup5C4BB9CB"
+          }
+        ],
+        "Name": "polls/errors",
+        "QueryString": "filter level = \"ERROR\"\n| fields @timestamp, status, reason, errorType, errorCode, pollId, responseId, requestId\n| sort @timestamp desc\n| limit 50"
+      }
+    },
+    "NateNiteProductionPollsQuerySubmissionsPerDay": {
+      "Type": "AWS::Logs::QueryDefinition",
+      "Properties": {
+        "LogGroupNames": [
+          {
+            "Ref": "NateNiteProductionPollsSubmitLogGroup5C4BB9CB"
+          }
+        ],
+        "Name": "polls/submissions-per-day",
+        "QueryString": "filter outcome = \"accepted\"\n| stats count(*) as submissions by pollId, datefloor(@timestamp, 1d) as day\n| sort day desc, pollId"
+      }
+    },
+    "NateNiteProductionPollsQueryRecentRequests": {
+      "Type": "AWS::Logs::QueryDefinition",
+      "Properties": {
+        "LogGroupNames": [
+          {
+            "Ref": "NateNiteProductionPollsSubmitLogGroup5C4BB9CB"
+          }
+        ],
+        "Name": "polls/recent-requests",
+        "QueryString": "filter event = \"submission\"\n| fields @timestamp, level, outcome, status, reason, pollId, bodyBytes, requestId, cloudfrontRequestId\n| sort @timestamp desc\n| limit 100"
+      }
+    },
     "NateNiteProductionPollsSubmitFunctionServiceRole6E8F580B": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -312,6 +368,11 @@
           }
         },
         "Handler": "handler.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "NateNiteProductionPollsSubmitLogGroup5C4BB9CB"
+          }
+        },
         "MemorySize": 256,
         "Role": {
           "Fn::GetAtt": [

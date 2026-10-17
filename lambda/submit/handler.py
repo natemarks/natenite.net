@@ -16,6 +16,7 @@ import json
 import os
 import re
 import secrets
+from collections import namedtuple
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -207,30 +208,77 @@ def _token_hash_from(request):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _validated(event, definitions, submitted):
-    """Return the parts of a valid submission, or raise."""
+def _validated(event, definitions, submitted, facts):
+    """Return the parts of a valid submission, or raise.
+
+    `facts` collects what is safe to log about the request as it is learned.
+    """
     _check_route(event)
     request = _parse_body(event)
     definition = definitions.get(request["pollId"])
     if definition is None:
         raise _Rejected(404, "unknown_poll")
+    # Only the ID of a real poll is ever recorded, never the requested text.
+    facts["pollId"] = definition["id"]
     _check_open(definition, submitted)
     _check_answers(definition, request["answers"])
     token_hash = _token_hash_from(request)
-    return definition, request["answers"], _email_from(request), token_hash
+    email = _email_from(request)
+    facts["hasBrowserToken"] = token_hash is not None
+    facts["hasEmail"] = email is not None
+    return definition, request["answers"], email, token_hash
 
 
-def handle(event, *, table, definitions, now, new_id=None):
-    """Process one Function URL event and return the HTTP response."""
-    new_id = new_id or _new_response_id
-    submitted = now()
+def _log(event, response, facts):
+    """Print one JSON line describing the outcome: never any content."""
+    headers = event.get("headers") or {}
+    status = response["statusCode"]
+    if status < 400:
+        level, outcome = "INFO", "accepted"
+    elif status < 500:
+        level, outcome = "WARN", "rejected"
+    else:
+        level, outcome = "ERROR", "error"
+    line = {
+        "level": level,
+        "event": "submission",
+        "outcome": outcome,
+        "status": status,
+        "pollId": facts["pollId"],
+        "responseId": facts["responseId"],
+        "hasEmail": facts["hasEmail"],
+        "hasBrowserToken": facts["hasBrowserToken"],
+        "bodyBytes": len((event.get("body") or "").encode("utf-8")),
+        "at": facts["at"],
+        "requestId": facts["requestId"],
+        "cloudfrontRequestId": headers.get("x-amz-cf-id"),
+    }
+    if status >= 400:
+        line["reason"] = json.loads(response["body"]).get("reason")
+    failure = facts["failure"]
+    if failure is not None:
+        # The kind of error only: its message can carry request details.
+        line["errorType"] = type(failure).__name__
+        if isinstance(failure, ClientError):
+            line["errorCode"] = failure.response.get("Error", {}).get("Code")
+    print(json.dumps(line))
+
+
+# The collaborators `handle` is given: where responses are stored, the poll
+# definitions, and how response IDs are made.
+_Services = namedtuple("_Services", ["table", "definitions", "new_id"])
+
+
+def _process(event, services, submitted, facts):
+    """Validate and store one submission; return the HTTP response."""
+    table = services.table
     try:
         definition, answers, email, token_hash = _validated(
-            event, definitions, submitted
+            event, services.definitions, submitted, facts
         )
     except _Rejected as rejection:
         return _response(rejection.status, {"reason": rejection.reason})
-    response_id = new_id(submitted)
+    response_id = services.new_id(submitted)
     item = {
         "pk": f"POLL#{definition['id']}",
         "sk": f"RESPONSE#{response_id}",
@@ -241,6 +289,7 @@ def handle(event, *, table, definitions, now, new_id=None):
     if token_hash:
         item["browserTokenHash"] = token_hash
     table.put_item(Item=item)
+    facts["responseId"] = response_id
     if email:
         # The answers are already stored. If the email cannot be, say so
         # (the visitor may retry) without losing them or echoing the address.
@@ -256,6 +305,32 @@ def handle(event, *, table, definitions, now, new_id=None):
         except ClientError:
             return _response(500, {"reason": "email_not_stored"})
     return _response(201, {"responseId": response_id})
+
+
+def handle(  # pylint: disable=too-many-arguments
+    event, *, table, definitions, now, new_id=None, request_id=None
+):
+    """Process one Function URL event and return the HTTP response."""
+    submitted = now()
+    facts = {
+        "pollId": None,
+        "responseId": None,
+        "hasEmail": False,
+        "hasBrowserToken": False,
+        "at": submitted.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "requestId": request_id,
+        "failure": None,
+    }
+    services = _Services(table, definitions, new_id or _new_response_id)
+    try:
+        response = _process(event, services, submitted, facts)
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        # Whatever went wrong, the visitor gets a clean 500 the page can
+        # retry, and the log gets the kind of error.
+        facts["failure"] = error
+        response = _response(500, {"reason": "internal_error"})
+    _log(event, response, facts)
+    return response
 
 
 @functools.lru_cache(maxsize=1)
@@ -277,4 +352,5 @@ def handler(event, context):  # pylint: disable=unused-argument
         table=_table(),
         definitions=_bundled_definitions(),
         now=lambda: datetime.now(timezone.utc),
+        request_id=getattr(context, "aws_request_id", None),
     )

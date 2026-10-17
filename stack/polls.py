@@ -26,6 +26,7 @@ from aws_cdk import (
     aws_cloudfront as cloudfront,
     aws_dynamodb as dynamodb,
     aws_lambda as lambda_,
+    aws_logs as logs,
     aws_route53 as r53,
     aws_route53_targets as targets,
     aws_s3 as s3,
@@ -38,6 +39,35 @@ from config.helper import APP_NAME, PROJECT_ROOT
 from config.settings import EnvironmentSetting, PollsSetting
 from stack.certificate import CertificateStack
 from stack.site import SiteStack
+
+# Saved Logs Insights queries for the periodic check, by name.
+SAVED_QUERIES = {
+    "polls/rejections-by-reason": (
+        'filter outcome = "rejected"\n'
+        "| stats count(*) as rejected by reason\n"
+        "| sort rejected desc"
+    ),
+    "polls/errors": (
+        'filter level = "ERROR"\n'
+        "| fields @timestamp, status, reason, errorType, errorCode, pollId,"
+        " responseId, requestId\n"
+        "| sort @timestamp desc\n"
+        "| limit 50"
+    ),
+    "polls/submissions-per-day": (
+        'filter outcome = "accepted"\n'
+        "| stats count(*) as submissions by pollId,"
+        " datefloor(@timestamp, 1d) as day\n"
+        "| sort day desc, pollId"
+    ),
+    "polls/recent-requests": (
+        'filter event = "submission"\n'
+        "| fields @timestamp, level, outcome, status, reason, pollId,"
+        " bodyBytes, requestId, cloudfrontRequestId\n"
+        "| sort @timestamp desc\n"
+        "| limit 100"
+    ),
+}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -131,6 +161,27 @@ class PollsStack(Stack):
             removal_policy=RemovalPolicy.RETAIN,
         )
 
+        # The function's log group: a year of history, kept if the stack is
+        # deleted (the lines hold no personal data). Without this, Lambda
+        # makes a group that never expires and is not managed here.
+        log_group = logs.LogGroup(
+            self,
+            f"{self._prefix}SubmitLogGroup",
+            retention=logs.RetentionDays.ONE_YEAR,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+
+        # Saved Logs Insights queries for the owner's periodic check. They use
+        # the fields the function writes on each log line.
+        for name, query in SAVED_QUERIES.items():
+            logs.CfnQueryDefinition(
+                self,
+                f"{self._prefix}Query{name.split('/')[1].title().replace('-', '')}",
+                name=name,
+                query_string=query,
+                log_group_names=[log_group.log_group_name],
+            )
+
         # The submit function. `polls` inside its folder is a symlink to the
         # repository's poll definitions; following it bundles the real files.
         self.submit_function = lambda_.Function(
@@ -146,6 +197,7 @@ class PollsStack(Stack):
             memory_size=256,
             timeout=Duration.seconds(10),
             environment={"TABLE_NAME": self.responses_table.table_name},
+            log_group=log_group,
         )
         self.responses_table.grant(self.submit_function, "dynamodb:PutItem")
         # IAM auth: only CloudFront (through OAC) may call the function URL

@@ -338,3 +338,74 @@ def test_function_bundle_holds_only_the_modules_and_every_definition(
     modules = {"handler.py", "limits.py", "definitions.py"}
     assert files == modules | definitions
     assert not (asset_dir / "polls").is_symlink()
+
+
+@pytest.mark.unit
+def test_function_logs_to_a_group_kept_for_a_year_and_after_teardown():
+    """An explicit log group: 365 days of history, kept if the stack goes."""
+    template = polls_template()
+    template.has_resource_properties(
+        "AWS::Logs::LogGroup", {"RetentionInDays": 365}
+    )
+    template.has_resource(
+        "AWS::Logs::LogGroup",
+        {"DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain"},
+    )
+    template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {
+            "Handler": "handler.handler",
+            "LoggingConfig": {"LogGroup": assertions.Match.any_value()},
+        },
+    )
+
+
+SAVED_QUERIES = {
+    "polls/rejections-by-reason": ['filter outcome = "rejected"', "by reason"],
+    "polls/errors": ['filter level = "ERROR"', "errorType", "responseId"],
+    "polls/submissions-per-day": [
+        'filter outcome = "accepted"',
+        "by pollId",
+        "datefloor(@timestamp, 1d)",
+    ],
+    "polls/recent-requests": [
+        'filter event = "submission"',
+        "sort @timestamp desc",
+        "limit 100",
+    ],
+}
+
+
+@pytest.mark.unit
+def test_the_routine_check_queries_are_saved_against_the_function_log_group():
+    """Four saved Logs Insights queries, each searching the function's logs."""
+    template = polls_template().to_json()
+    log_groups = [
+        name
+        for name, resource in template["Resources"].items()
+        if resource["Type"] == "AWS::Logs::LogGroup"
+    ]
+    saved = {
+        resource["Properties"]["Name"]: resource["Properties"]
+        for resource in template["Resources"].values()
+        if resource["Type"] == "AWS::Logs::QueryDefinition"
+    }
+
+    assert sorted(saved) == sorted(SAVED_QUERIES)
+    for name, fragments in SAVED_QUERIES.items():
+        assert saved[name]["LogGroupNames"] == [{"Ref": log_groups[0]}]
+        for fragment in fragments:
+            assert fragment in saved[name]["QueryString"], (name, fragment)
+
+
+@pytest.mark.unit
+def test_there_are_no_alarms_and_no_notification_topics():
+    """The owner checks periodically by hand; nothing pages anyone."""
+    types = {
+        resource["Type"]
+        for resource in polls_template().to_json()["Resources"].values()
+    }
+
+    assert "AWS::CloudWatch::Alarm" not in types
+    assert "AWS::CloudWatch::CompositeAlarm" not in types
+    assert "AWS::SNS::Topic" not in types
