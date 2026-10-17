@@ -11,6 +11,7 @@ Flow:
 """
 
 import functools
+import hashlib
 import json
 import os
 import re
@@ -33,6 +34,9 @@ BUNDLED_DEFINITIONS_DIR = Path(__file__).parent / "polls"
 # Deliberately not a full RFC check, which would reject real addresses and
 # still not prove the mailbox exists: one @, text on both sides, and a dot
 # inside the domain (no empty parts), with no whitespace anywhere.
+# The page makes the browser token from 128 random bits, as hex.
+_TOKEN_SHAPE = re.compile(r"[0-9a-f]{32}")
+
 _EMAIL_SHAPE = re.compile(r"[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+")
 
 
@@ -193,8 +197,18 @@ def _email_from(request):
     return email
 
 
+def _token_hash_from(request):
+    """The SHA-256 (hex) of the browser token, or None when none was sent."""
+    if "browserToken" not in request:
+        return None
+    token = request["browserToken"]
+    if not isinstance(token, str) or not _TOKEN_SHAPE.fullmatch(token):
+        raise _Rejected(400, "invalid_token")
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def _validated(event, definitions, submitted):
-    """Return (definition, answers, email) for a valid submission or raise."""
+    """Return the parts of a valid submission, or raise."""
     _check_route(event)
     request = _parse_body(event)
     definition = definitions.get(request["pollId"])
@@ -202,7 +216,8 @@ def _validated(event, definitions, submitted):
         raise _Rejected(404, "unknown_poll")
     _check_open(definition, submitted)
     _check_answers(definition, request["answers"])
-    return definition, request["answers"], _email_from(request)
+    token_hash = _token_hash_from(request)
+    return definition, request["answers"], _email_from(request), token_hash
 
 
 def handle(event, *, table, definitions, now, new_id=None):
@@ -210,19 +225,22 @@ def handle(event, *, table, definitions, now, new_id=None):
     new_id = new_id or _new_response_id
     submitted = now()
     try:
-        definition, answers, email = _validated(event, definitions, submitted)
+        definition, answers, email, token_hash = _validated(
+            event, definitions, submitted
+        )
     except _Rejected as rejection:
         return _response(rejection.status, {"reason": rejection.reason})
     response_id = new_id(submitted)
-    table.put_item(
-        Item={
-            "pk": f"POLL#{definition['id']}",
-            "sk": f"RESPONSE#{response_id}",
-            "answers": answers,
-            "submittedAt": submitted.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "pollVersion": definition["version"],
-        }
-    )
+    item = {
+        "pk": f"POLL#{definition['id']}",
+        "sk": f"RESPONSE#{response_id}",
+        "answers": answers,
+        "submittedAt": submitted.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "pollVersion": definition["version"],
+    }
+    if token_hash:
+        item["browserTokenHash"] = token_hash
+    table.put_item(Item=item)
     if email:
         # The answers are already stored. If the email cannot be, say so
         # (the visitor may retry) without losing them or echoing the address.

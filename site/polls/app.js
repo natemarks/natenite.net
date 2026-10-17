@@ -6,6 +6,23 @@
 
   var root = document.getElementById('poll');
 
+  // Even reading window.localStorage can throw (storage blocked); the
+  // library tolerates a storage whose methods throw.
+  function browserStorage() {
+    try {
+      return window.localStorage;
+    } catch (error) {
+      return {
+        getItem: function () { throw error; },
+        setItem: function () { throw error; }
+      };
+    }
+  }
+
+  function randomBytes(bytes) {
+    return window.crypto.getRandomValues(bytes);
+  }
+
   function pollIdFromPath() {
     var parts = window.location.pathname.split('/').filter(Boolean);
     return parts.length ? parts[0] : '';
@@ -131,6 +148,16 @@
       return ['single', 'multi', 'rating', 'text'].indexOf(question.type) !== -1;
     });
 
+    var earlier = PollLib.previousSubmission(browserStorage(), definition.id);
+    if (earlier) {
+      // Informational only: the form stays usable (a browser can be shared).
+      var earlierNote = document.createElement('p');
+      earlierNote.className = 'note';
+      earlierNote.setAttribute('role', 'status');
+      earlierNote.textContent = PollLib.answeredNotice(earlier);
+      root.appendChild(earlierNote);
+    }
+
     var form = document.createElement('form');
     questions.forEach(function (question) {
       form.appendChild(renderQuestion(question));
@@ -183,7 +210,12 @@
       }
       button.disabled = true;
       status.textContent = 'Sending…';
-      PollLib.prepareSubmission(definition.id, answers, emailInput.value)
+      PollLib.prepareSubmission(
+        definition.id,
+        answers,
+        emailInput.value,
+        PollLib.getBrowserToken(browserStorage(), randomBytes)
+      )
         .then(function (prepared) {
           return fetch('/submit', {
             method: 'POST',
@@ -197,6 +229,9 @@
             return;
           }
           if (response.status === 201) {
+            PollLib.rememberSubmission(
+              browserStorage(), definition.id, Date.now()
+            );
             showMessage('Thank you! Your response was recorded.');
             return null;
           }
@@ -206,6 +241,9 @@
             var message = PollLib.rejectionMessage(data.reason);
             if (data.reason === 'email_not_stored') {
               // The answers are saved: do not invite a duplicate resubmit.
+              PollLib.rememberSubmission(
+                browserStorage(), definition.id, Date.now()
+              );
               showMessage(message);
               return;
             }

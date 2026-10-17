@@ -801,3 +801,81 @@ def test_an_email_address_never_reaches_logs_or_other_output(caplog, capsys):
     out, err = capsys.readouterr()
     everything = caplog.text + out + err + "".join(bodies)
     assert "needle" not in everything
+
+
+TOKEN = "0123456789abcdef0123456789abcdef"
+# SHA-256 of TOKEN, computed independently with Python hashlib.
+TOKEN_HASH = "3eb1bd439947eb762998e566ccc2e099c791118b2f40579cc4f7da2b5061b7f9"
+
+
+def with_token(token, **extra):
+    """A valid poll1 submission carrying a browser token."""
+    return {
+        "pollId": "poll1",
+        "answers": {"q1": "a"},
+        "browserToken": token,
+        **extra,
+    }
+
+
+@pytest.mark.unit
+def test_the_browser_token_is_stored_only_as_its_hash():
+    """The record holds the hash; the raw token appears nowhere."""
+    response, table = submit(with_token(TOKEN))
+
+    assert response["statusCode"] == 201
+    assert table.items[0]["browserTokenHash"] == TOKEN_HASH
+    assert TOKEN not in json.dumps(table.items)
+    assert TOKEN not in response["body"]
+
+
+@pytest.mark.unit
+def test_a_repeat_submission_with_the_same_token_is_accepted():
+    """Soft dedupe: the server never rejects a repeat, it only records it."""
+    table = FakeTable()
+
+    first, _ = submit(with_token(TOKEN), table=table)
+    second, _ = submit(
+        with_token(TOKEN), table=table, now=NOW + timedelta(minutes=5)
+    )
+
+    assert first["statusCode"] == second["statusCode"] == 201
+    assert len(table.items) == 2
+    assert [i["browserTokenHash"] for i in table.items] == [TOKEN_HASH] * 2
+    assert table.items[0]["sk"] != table.items[1]["sk"]
+
+
+@pytest.mark.unit
+def test_a_submission_without_a_token_is_accepted_and_has_no_hash():
+    """Scripts and older cached pages send no token and still work."""
+    response, table = submit({"pollId": "poll1", "answers": {"q1": "a"}})
+
+    assert response["statusCode"] == 201
+    assert "browserTokenHash" not in table.items[0]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "token",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("0123456789abcdef", id="too-short"),
+        pytest.param(TOKEN + "0", id="too-long"),
+        pytest.param(TOKEN.upper(), id="upper-case-hex"),
+        pytest.param("g" * 32, id="not-hex"),
+        pytest.param(" " + TOKEN[:31], id="leading-space"),
+        pytest.param(TOKEN[:31] + "\n", id="trailing-newline"),
+        pytest.param(5, id="number"),
+        pytest.param(None, id="null"),
+        pytest.param(True, id="true"),
+        pytest.param([TOKEN], id="list"),
+        pytest.param({"token": TOKEN}, id="object"),
+    ],
+)
+def test_a_malformed_token_is_rejected_and_nothing_is_stored(token):
+    """A token that is not 32 lower-case hex characters is `invalid_token`."""
+    response, table = submit(with_token(token))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "invalid_token"
+    assert not table.items

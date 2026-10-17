@@ -24,11 +24,14 @@
 
   // The request body and the headers to send with it. The body string is
   // built once and hashed as-is, so the signed bytes are the sent bytes.
-  async function prepareSubmission(pollId, answers, email) {
+  async function prepareSubmission(pollId, answers, email, browserToken) {
     var request = { pollId: pollId, answers: answers };
     var trimmed = typeof email === 'string' ? email.trim() : '';
     if (trimmed !== '') {
       request.email = trimmed;
+    }
+    if (typeof browserToken === 'string' && browserToken !== '') {
+      request.browserToken = browserToken;
     }
     var body = JSON.stringify(request);
     return {
@@ -114,7 +117,80 @@
       : null;
   }
 
+  // A random label for this browser: 128 random bits as 32 hex characters.
+  // It identifies no one. `fill` fills a Uint8Array with random bytes
+  // (crypto.getRandomValues in the browser); it is passed in for tests.
+  function newBrowserToken(fill) {
+    var bytes = fill(new Uint8Array(16));
+    return Array.from(bytes)
+      .map(function (b) { return b.toString(16).padStart(2, '0'); })
+      .join('');
+  }
+
+  var TOKEN_KEY = 'poll-browser-token';
+  var TOKEN_SHAPE = /^[0-9a-f]{32}$/;
+
+  // This browser's token: the stored one, or a new one that is stored. If
+  // storage is blocked the token lasts only for this page view, so repeats
+  // cannot be recognised, but nothing breaks.
+  function getBrowserToken(storage, fill) {
+    try {
+      var stored = storage.getItem(TOKEN_KEY);
+      if (typeof stored === 'string' && TOKEN_SHAPE.test(stored)) {
+        return stored;
+      }
+    } catch (error) {
+      return newBrowserToken(fill);
+    }
+    var token = newBrowserToken(fill);
+    try {
+      storage.setItem(TOKEN_KEY, token);
+    } catch (error) {
+      // Not persisted; still usable for this visit.
+    }
+    return token;
+  }
+
+  function answeredKey(pollId) {
+    return 'poll-answered:' + pollId;
+  }
+
+  // Remember (per poll) that this browser has submitted, and when.
+  function rememberSubmission(storage, pollId, nowMs) {
+    try {
+      storage.setItem(answeredKey(pollId), new Date(nowMs).toISOString());
+    } catch (error) {
+      // Storage blocked: the page just will not remember. Nothing breaks.
+    }
+  }
+
+  // The ISO time of an earlier submission from this browser, or null.
+  function previousSubmission(storage, pollId) {
+    try {
+      var stored = storage.getItem(answeredKey(pollId));
+      if (typeof stored === 'string' && !Number.isNaN(Date.parse(stored))) {
+        return stored;
+      }
+    } catch (error) {
+      // Storage blocked.
+    }
+    return null;
+  }
+
+  // Informational only: it never stops anyone answering, because a browser
+  // can be shared.
+  function answeredNotice(isoTime) {
+    return 'You already answered this poll in this browser on ' +
+      isoTime.slice(0, 10) + '. ' +
+      'If someone else is using this browser, you can answer too.';
+  }
+
   return {
+    rememberSubmission: rememberSubmission,
+    previousSubmission: previousSubmission,
+    answeredNotice: answeredNotice,
+    getBrowserToken: getBrowserToken,
+    newBrowserToken: newBrowserToken,
     rejectionMessage: rejectionMessage,
     MAX_TEXT_CHARS: MAX_TEXT_CHARS,
     isClosed: isClosed,

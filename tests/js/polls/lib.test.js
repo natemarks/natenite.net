@@ -183,3 +183,150 @@ test('rejectionMessage tells the respondent when only the email was lost', () =>
     'Thank you! Your answers were saved, but we could not save your email address.'
   );
 });
+
+// An in-memory stand-in for localStorage, optionally broken like a
+// browser with storage blocked.
+function fakeStorage(broken) {
+  const data = new Map();
+  return {
+    data,
+    getItem(key) {
+      if (broken) { throw new Error('storage blocked'); }
+      return data.has(key) ? data.get(key) : null;
+    },
+    setItem(key, value) {
+      if (broken) { throw new Error('storage blocked'); }
+      data.set(key, String(value));
+    }
+  };
+}
+
+// A random source that fills the array with a known sequence.
+function sequenceRandom(start) {
+  let next = start;
+  return (bytes) => {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = next % 256;
+      next += 1;
+    }
+    return bytes;
+  };
+}
+
+test('newBrowserToken is 32 lower-case hex characters from 16 random bytes', () => {
+  assert.equal(
+    lib.newBrowserToken(sequenceRandom(0)),
+    '000102030405060708090a0b0c0d0e0f'
+  );
+  assert.equal(
+    lib.newBrowserToken(sequenceRandom(250)),
+    'fafbfcfdfeff00010203040506070809'
+  );
+  assert.match(lib.newBrowserToken(sequenceRandom(7)), /^[0-9a-f]{32}$/);
+});
+
+test('getBrowserToken makes a token on the first visit and keeps it', () => {
+  const storage = fakeStorage(false);
+
+  const first = lib.getBrowserToken(storage, sequenceRandom(0));
+  assert.equal(first, '000102030405060708090a0b0c0d0e0f');
+  assert.equal(storage.data.get('poll-browser-token'), first);
+
+  // A later visit gets the same token and does not use the random source.
+  const later = lib.getBrowserToken(storage, () => {
+    throw new Error('should not be called');
+  });
+  assert.equal(later, first);
+});
+
+test('a stored value that is not a token is replaced', () => {
+  const storage = fakeStorage(false);
+  storage.data.set('poll-browser-token', 'not-a-token');
+
+  const token = lib.getBrowserToken(storage, sequenceRandom(16));
+
+  assert.equal(token, '101112131415161718191a1b1c1d1e1f');
+  assert.equal(storage.data.get('poll-browser-token'), token);
+});
+
+test('with storage blocked a token is still made, for this visit only', () => {
+  const storage = fakeStorage(true);
+
+  const token = lib.getBrowserToken(storage, sequenceRandom(0));
+
+  assert.match(token, /^[0-9a-f]{32}$/);
+});
+
+const SUBMITTED_MS = Date.parse('2026-10-17T12:00:00Z');
+
+test('a submitted poll is remembered per poll, with the time', () => {
+  const storage = fakeStorage(false);
+
+  assert.equal(lib.previousSubmission(storage, 'poll1'), null);
+
+  lib.rememberSubmission(storage, 'poll1', SUBMITTED_MS);
+
+  assert.equal(
+    lib.previousSubmission(storage, 'poll1'),
+    '2026-10-17T12:00:00.000Z'
+  );
+  assert.equal(lib.previousSubmission(storage, 'poll2'), null);
+});
+
+test('a stored value that is not a time is ignored', () => {
+  const storage = fakeStorage(false);
+  storage.data.set('poll-answered:poll1', 'yesterday-ish');
+
+  assert.equal(lib.previousSubmission(storage, 'poll1'), null);
+});
+
+test('with storage blocked nothing is remembered and nothing breaks', () => {
+  const storage = fakeStorage(true);
+
+  assert.doesNotThrow(() => lib.rememberSubmission(storage, 'poll1', SUBMITTED_MS));
+  assert.equal(lib.previousSubmission(storage, 'poll1'), null);
+});
+
+test('the already-answered note names the date and does not block anyone', () => {
+  assert.equal(
+    lib.answeredNotice('2026-10-17T12:00:00.000Z'),
+    'You already answered this poll in this browser on 2026-10-17. ' +
+      'If someone else is using this browser, you can answer too.'
+  );
+});
+
+const A_TOKEN = '000102030405060708090a0b0c0d0e0f';
+
+test('prepareSubmission sends the browser token and signs that exact body', async () => {
+  const withoutEmail = await lib.prepareSubmission('poll1', { q1: 'a' }, '', A_TOKEN);
+  assert.equal(
+    withoutEmail.body,
+    '{"pollId":"poll1","answers":{"q1":"a"},"browserToken":"' + A_TOKEN + '"}'
+  );
+  // Expected values computed independently with Python hashlib.
+  assert.equal(
+    withoutEmail.headers['x-amz-content-sha256'],
+    '0f510a8c3fa3b9991761aab7652138453015598fc11adba97d4a3a8eca5b218e'
+  );
+
+  const withEmail = await lib.prepareSubmission(
+    'poll1', { q1: 'a' }, 'reader@example.com', A_TOKEN
+  );
+  assert.equal(
+    withEmail.body,
+    '{"pollId":"poll1","answers":{"q1":"a"},"email":"reader@example.com",' +
+      '"browserToken":"' + A_TOKEN + '"}'
+  );
+  assert.equal(
+    withEmail.headers['x-amz-content-sha256'],
+    'c61fbfc77ea1a5075aa30d8ce091e2732a65d3783dec06d52f460ee75b405b8f'
+  );
+});
+
+test('no token means none is sent', async () => {
+  const plain = await lib.prepareSubmission('poll1', { q1: 'a' });
+  for (const none of [undefined, null, '']) {
+    const prepared = await lib.prepareSubmission('poll1', { q1: 'a' }, undefined, none);
+    assert.equal(prepared.body, plain.body);
+  }
+});
