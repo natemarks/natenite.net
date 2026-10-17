@@ -1,3 +1,5 @@
 {
-  "subdomain": "polls"
+  "subdomain": "polls",
+  "rate_limit": 20,
+  "rate_window_seconds": 300
 }

@@ -12,14 +12,17 @@ Customize:
 """
 
 # pylint: disable=duplicate-code
+import dataclasses
+
 import pytest
 from aws_cdk import App, assertions, Environment
 from config.helper import PROJECT_ROOT
-from config.settings import get_actual_path
+from config.settings import PollsSetting, get_actual_path
 from config.project import APP_ENV_TO_AWS_ACCOUNT
 from stack.certificate import CertificateStack, CertificateInput
 from stack.polls import PollsStack, PollsInput
 from stack.site import SiteStack, SiteInput
+from tests.unit.stack.test_site import site_template
 from tests.helper import (
     case_data_path,
     normalize_asset_hashes,
@@ -30,7 +33,9 @@ from tests.helper import (
 ENVIRONMENT = "production"
 
 
-def build_polls_stack(environment: str = ENVIRONMENT, outdir=None):
+def build_polls_stack(
+    environment: str = ENVIRONMENT, outdir=None, polls_setting=None
+):
     """Build the Polls stack (and its dependencies) from real config."""
     input_path = get_actual_path(environment)
     app = App(outdir=str(outdir)) if outdir else App()
@@ -49,18 +54,27 @@ def build_polls_stack(environment: str = ENVIRONMENT, outdir=None):
         s_input=SiteInput.from_config_directory(input_path),
         certificate_stack=cert_stack,
     )
+    polls_input = PollsInput.from_config_directory(input_path)
+    if polls_setting is not None:
+        polls_input = dataclasses.replace(
+            polls_input, polls_setting=polls_setting
+        )
     return PollsStack(
         scope=app,
         cdk_env=cdk_env,
-        s_input=PollsInput.from_config_directory(input_path),
+        s_input=polls_input,
         certificate_stack=cert_stack,
         site_stack=site_stack,
     )
 
 
-def polls_template(environment: str = ENVIRONMENT) -> assertions.Template:
+def polls_template(
+    environment: str = ENVIRONMENT, polls_setting=None
+) -> assertions.Template:
     """Synthesize the Polls stack for a real environment's config."""
-    return assertions.Template.from_stack(build_polls_stack(environment))
+    return assertions.Template.from_stack(
+        build_polls_stack(environment, polls_setting=polls_setting)
+    )
 
 
 @pytest.mark.unit
@@ -409,3 +423,68 @@ def test_there_are_no_alarms_and_no_notification_topics():
     assert "AWS::CloudWatch::Alarm" not in types
     assert "AWS::CloudWatch::CompositeAlarm" not in types
     assert "AWS::SNS::Topic" not in types
+
+
+def submit_function_properties(template):
+    """The properties of the submit function in a synthesized template."""
+    return next(
+        resource["Properties"]
+        for resource in template.to_json()["Resources"].values()
+        if resource["Type"] == "AWS::Lambda::Function"
+        and resource["Properties"].get("Handler") == "handler.handler"
+    )
+
+
+@pytest.mark.unit
+def test_production_reserves_no_concurrency_while_the_quota_is_too_low():
+    """Unset in settings: no reservation, so the deploy works on a quota of 10."""
+    properties = submit_function_properties(polls_template())
+
+    assert "ReservedConcurrentExecutions" not in properties
+
+
+@pytest.mark.unit
+def test_a_reservation_in_settings_is_applied_to_the_function():
+    """Once the quota is raised, setting a number is the only change needed."""
+    setting = PollsSetting(
+        subdomain="polls",
+        rate_limit=20,
+        rate_window_seconds=300,
+        reserved_concurrency=2,
+    )
+
+    properties = submit_function_properties(
+        polls_template(polls_setting=setting)
+    )
+
+    assert properties["ReservedConcurrentExecutions"] == 2
+
+
+@pytest.mark.unit
+def test_the_rate_rule_watches_the_host_and_path_the_polls_site_serves():
+    """Rename the submit path or the host in one place and this fails."""
+    site = site_template().to_json()["Resources"]
+    acl = next(
+        r["Properties"]
+        for r in site.values()
+        if r["Type"] == "AWS::WAFv2::WebACL"
+    )
+    rule = next(r for r in acl["Rules"] if r["Name"] == "PollsSubmitRateLimit")
+    statements = rule["Statement"]["RateBasedStatement"]["ScopeDownStatement"][
+        "AndStatement"
+    ]["Statements"]
+    watched_host, watched_path, watched_method = (
+        s["ByteMatchStatement"]["SearchString"] for s in statements
+    )
+
+    polls = polls_template().to_json()["Resources"]
+    distribution = next(
+        r["Properties"]["DistributionConfig"]
+        for r in polls.values()
+        if r["Type"] == "AWS::CloudFront::Distribution"
+    )
+    (submit_behavior,) = distribution["CacheBehaviors"]
+
+    assert watched_host in distribution["Aliases"]
+    assert watched_path == submit_behavior["PathPattern"]
+    assert watched_method in submit_behavior["AllowedMethods"]

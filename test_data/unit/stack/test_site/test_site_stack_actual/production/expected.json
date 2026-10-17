@@ -219,6 +219,78 @@
         },
         "Rules": [
           {
+            "Action": {
+              "Block": {}
+            },
+            "Name": "PollsSubmitRateLimit",
+            "Priority": 0,
+            "Statement": {
+              "RateBasedStatement": {
+                "AggregateKeyType": "IP",
+                "EvaluationWindowSec": 300,
+                "Limit": 20,
+                "ScopeDownStatement": {
+                  "AndStatement": {
+                    "Statements": [
+                      {
+                        "ByteMatchStatement": {
+                          "FieldToMatch": {
+                            "SingleHeader": {
+                              "Name": "host"
+                            }
+                          },
+                          "PositionalConstraint": "EXACTLY",
+                          "SearchString": "polls.natenite.net",
+                          "TextTransformations": [
+                            {
+                              "Priority": 0,
+                              "Type": "LOWERCASE"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "ByteMatchStatement": {
+                          "FieldToMatch": {
+                            "UriPath": {}
+                          },
+                          "PositionalConstraint": "EXACTLY",
+                          "SearchString": "/submit",
+                          "TextTransformations": [
+                            {
+                              "Priority": 0,
+                              "Type": "NONE"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "ByteMatchStatement": {
+                          "FieldToMatch": {
+                            "Method": {}
+                          },
+                          "PositionalConstraint": "EXACTLY",
+                          "SearchString": "POST",
+                          "TextTransformations": [
+                            {
+                              "Priority": 0,
+                              "Type": "NONE"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "VisibilityConfig": {
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "PollsSubmitRateLimit",
+              "SampledRequestsEnabled": true
+            }
+          },
+          {
             "Name": "AWSManagedRulesCommonRuleSet",
             "OverrideAction": {
               "None": {}

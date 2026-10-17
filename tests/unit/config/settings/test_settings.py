@@ -39,3 +39,14 @@ def test_polls_setting_reads_production_subdomain():
 
     assert isinstance(result, PollsSetting)
     assert result.subdomain == "polls"
+
+
+@pytest.mark.unit
+def test_polls_setting_reads_the_rate_limit_and_leaves_the_reservation_unset():
+    """20 submits per 300 seconds per address; no concurrency reservation."""
+    result = PollsSetting.from_data_path(get_actual_path("production"))
+
+    assert result.rate_limit == 20
+    assert result.rate_window_seconds == 300
+    # The account's Lambda quota (10) is too low to reserve any; see slice 10.
+    assert result.reserved_concurrency is None

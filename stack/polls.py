@@ -198,6 +198,11 @@ class PollsStack(Stack):
             timeout=Duration.seconds(10),
             environment={"TABLE_NAME": self.responses_table.table_name},
             log_group=log_group,
+            # Optional: Lambda cannot reserve any concurrency while the
+            # account quota is as low as 10 (see PollsSetting).
+            reserved_concurrent_executions=(
+                self.s_input.polls_setting.reserved_concurrency
+            ),
         )
         self.responses_table.grant(self.submit_function, "dynamodb:PutItem")
         # IAM auth: only CloudFront (through OAC) may call the function URL
