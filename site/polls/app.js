@@ -18,16 +18,16 @@
     root.appendChild(p);
   }
 
-  function renderSingleChoice(question) {
+  function renderChoices(question, inputType, options) {
     var fieldset = document.createElement('fieldset');
     var legend = document.createElement('legend');
     legend.textContent = question.prompt;
     fieldset.appendChild(legend);
 
-    question.options.forEach(function (option) {
+    options.forEach(function (option) {
       var label = document.createElement('label');
       var input = document.createElement('input');
-      input.type = 'radio';
+      input.type = inputType;
       input.name = question.id;
       input.value = option.id;
       label.appendChild(input);
@@ -37,12 +37,38 @@
     return fieldset;
   }
 
+  function ratingOptions(question) {
+    var options = [];
+    for (var n = question.min; n <= question.max; n += 1) {
+      options.push({ id: String(n), label: String(n) });
+    }
+    return options;
+  }
+
+  function renderQuestion(question) {
+    if (question.type === 'multi') {
+      return renderChoices(question, 'checkbox', question.options);
+    }
+    if (question.type === 'rating') {
+      return renderChoices(question, 'radio', ratingOptions(question));
+    }
+    return renderChoices(question, 'radio', question.options);
+  }
+
+  // Answers in the shapes the server expects: an option ID, a list of
+  // option IDs, or an integer rating. Unanswered questions are left out.
   function readAnswers(form, questions) {
     var answers = {};
     questions.forEach(function (question) {
-      var value = form.elements.namedItem(question.id).value;
-      if (value) {
-        answers[question.id] = value;
+      var checked = Array.prototype.filter.call(form.elements, function (el) {
+        return el.name === question.id && el.checked;
+      });
+      if (question.type === 'multi') {
+        answers[question.id] = checked.map(function (el) { return el.value; });
+      } else if (checked.length) {
+        answers[question.id] = question.type === 'rating'
+          ? Number(checked[0].value)
+          : checked[0].value;
       }
     });
     return answers;
@@ -57,12 +83,12 @@
     root.appendChild(heading);
 
     var questions = definition.questions.filter(function (question) {
-      return question.type === 'single';
+      return ['single', 'multi', 'rating'].indexOf(question.type) !== -1;
     });
 
     var form = document.createElement('form');
     questions.forEach(function (question) {
-      form.appendChild(renderSingleChoice(question));
+      form.appendChild(renderQuestion(question));
     });
 
     var button = document.createElement('button');
@@ -78,7 +104,7 @@
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       var answers = readAnswers(form, questions);
-      if (Object.keys(answers).length !== questions.length) {
+      if (PollLib.missingQuestions(questions, answers).length) {
         status.textContent = 'Please answer every question.';
         return;
       }

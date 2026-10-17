@@ -92,23 +92,60 @@ def _parse_body(event):
         isinstance(request, dict)
         and isinstance(request.get("pollId"), str)
         and isinstance(request.get("answers"), dict)
-        and all(isinstance(a, str) for a in request["answers"].values())
     ):
         raise _Rejected(400, "invalid_request")
     return request
 
 
+def _check_single(question, value):
+    """A single-choice answer is one of the question's option IDs."""
+    if not isinstance(value, str):
+        raise _Rejected(400, "invalid_answer")
+    if value not in {option["id"] for option in question["options"]}:
+        raise _Rejected(400, "unknown_option")
+
+
+def _check_multi(question, value):
+    """Multiple-choice answers are lists of the question's option IDs."""
+    if not isinstance(value, list) or not all(
+        isinstance(option_id, str) for option_id in value
+    ):
+        raise _Rejected(400, "invalid_answer")
+    if not value:
+        raise _Rejected(400, "missing_answer")
+    option_ids = {option["id"] for option in question["options"]}
+    for option_id in value:
+        if option_id not in option_ids:
+            raise _Rejected(400, "unknown_option")
+    if len(set(value)) != len(value):
+        raise _Rejected(400, "duplicate_option")
+
+
+def _check_rating(question, value):
+    """A rating is a whole number from the question's min to its max."""
+    # bool is a subclass of int in Python, so exclude it explicitly
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise _Rejected(400, "invalid_answer")
+    if not question["min"] <= value <= question["max"]:
+        raise _Rejected(400, "rating_out_of_range")
+
+
+_ANSWER_CHECKS = {
+    "single": _check_single,
+    "multi": _check_multi,
+    "rating": _check_rating,
+}
+
+
 def _check_answers(definition, answers):
-    """Raise unless the answers fit the poll's questions and options."""
+    """Raise unless the answers fit the poll's questions."""
     question_ids = {question["id"] for question in definition["questions"]}
     if set(answers) - question_ids:
         raise _Rejected(400, "unknown_question")
     for question in definition["questions"]:
         if question["id"] not in answers:
             raise _Rejected(400, "missing_answer")
-        option_ids = {option["id"] for option in question["options"]}
-        if answers[question["id"]] not in option_ids:
-            raise _Rejected(400, "unknown_option")
+        _ANSWER_CHECKS[question["type"]](question, answers[question["id"]])
 
 
 def _validated(event, definitions):

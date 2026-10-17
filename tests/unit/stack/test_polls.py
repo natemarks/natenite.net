@@ -14,6 +14,7 @@ Customize:
 # pylint: disable=duplicate-code
 import pytest
 from aws_cdk import App, assertions, Environment
+from config.helper import PROJECT_ROOT
 from config.settings import get_actual_path
 from config.project import APP_ENV_TO_AWS_ACCOUNT
 from stack.certificate import CertificateStack, CertificateInput
@@ -309,7 +310,7 @@ def test_cloudfront_may_invoke_the_function(action):
 
 
 @pytest.mark.unit
-def test_function_bundle_holds_only_the_handler_limits_and_definitions(
+def test_function_bundle_holds_only_the_handler_limits_and_every_definition(
     tmp_path,
 ):
     """The deployed bundle has real definition files and no stray caches."""
@@ -329,5 +330,10 @@ def test_function_bundle_holds_only_the_handler_limits_and_definitions(
         if path.is_file()
     }
 
-    assert files == {"handler.py", "limits.py", "polls/poll1.json"}
+    # Expected from the source folder, so adding a poll needs no test edit
+    definitions = {
+        f"polls/{path.name}"
+        for path in (PROJECT_ROOT / "polls").glob("*.json")
+    }
+    assert files == {"handler.py", "limits.py"} | definitions
     assert not (asset_dir / "polls").is_symlink()

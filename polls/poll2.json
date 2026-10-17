@@ -1,0 +1,33 @@
+{
+  "id": "poll2",
+  "title": "Example poll with every question type",
+  "version": 1,
+  "questions": [
+    {
+      "id": "q1",
+      "type": "single",
+      "prompt": "Which option do you prefer?",
+      "options": [
+        { "id": "a", "label": "Option A" },
+        { "id": "b", "label": "Option B" }
+      ]
+    },
+    {
+      "id": "q2",
+      "type": "multi",
+      "prompt": "Which of these do you use? Choose any.",
+      "options": [
+        { "id": "x", "label": "Option X" },
+        { "id": "y", "label": "Option Y" },
+        { "id": "z", "label": "Option Z" }
+      ]
+    },
+    {
+      "id": "q3",
+      "type": "rating",
+      "prompt": "How would you rate it, from 1 to 5?",
+      "min": 1,
+      "max": 5
+    }
+  ]
+}

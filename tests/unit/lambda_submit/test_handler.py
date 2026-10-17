@@ -35,6 +35,39 @@ DEFINITIONS = {
 }
 
 
+MIXED_POLL = {
+    "id": "poll2",
+    "title": "Poll with every question type",
+    "version": 1,
+    "questions": [
+        {
+            "id": "q1",
+            "type": "single",
+            "prompt": "Pick one",
+            "options": [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}],
+        },
+        {
+            "id": "q2",
+            "type": "multi",
+            "prompt": "Pick any",
+            "options": [
+                {"id": "x", "label": "X"},
+                {"id": "y", "label": "Y"},
+                {"id": "z", "label": "Z"},
+            ],
+        },
+        {
+            "id": "q3",
+            "type": "rating",
+            "prompt": "Rate it",
+            "min": 1,
+            "max": 5,
+        },
+    ],
+}
+DEFINITIONS["poll2"] = MIXED_POLL
+
+
 class FakeTable:  # pylint: disable=too-few-public-methods
     """In-memory stand-in for the DynamoDB table."""
 
@@ -184,8 +217,13 @@ def test_body_over_six_kilobytes_is_rejected_and_not_stored():
         ),
         pytest.param(
             '{"pollId": "poll1", "answers": {"q1": ["a"]}}',
-            "invalid_request",
-            id="answer-not-a-string",
+            "invalid_answer",
+            id="list-for-a-single-choice-question",
+        ),
+        pytest.param(
+            '{"pollId": "poll1", "answers": {"q1": 5}}',
+            "invalid_answer",
+            id="number-for-a-single-choice-question",
         ),
     ],
 )
@@ -264,3 +302,168 @@ def test_bundled_definitions_accept_a_valid_submission():
 
     assert response["statusCode"] == 201
     assert table.items[0]["pollVersion"] == poll["version"]
+
+
+@pytest.mark.unit
+def test_multiple_choice_and_rating_answers_are_stored_in_their_shapes():
+    """A list of option IDs and an integer are stored as given."""
+    response, table = submit(
+        {
+            "pollId": "poll2",
+            "answers": {"q1": "a", "q2": ["x", "z"], "q3": 4},
+        }
+    )
+
+    assert response["statusCode"] == 201
+    assert table.items[0]["answers"] == {
+        "q1": "a",
+        "q2": ["x", "z"],
+        "q3": 4,
+    }
+
+
+def mixed_answers(**overrides):
+    """A valid answer set for the mixed poll, with some answers replaced."""
+    answers = {"q1": "a", "q2": ["x"], "q3": 3}
+    answers.update(overrides)
+    return {"pollId": "poll2", "answers": answers}
+
+
+def reason_of(response):
+    """The machine-readable reason in an error response."""
+    return json.loads(response["body"])["reason"]
+
+
+@pytest.mark.unit
+def test_multiple_choice_with_an_unknown_option_is_rejected():
+    """Every selected option must be one the question offers."""
+    response, table = submit(mixed_answers(q2=["x", "nope"]))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "unknown_option"
+    assert not table.items
+
+
+@pytest.mark.unit
+def test_multiple_choice_with_a_repeated_option_is_rejected():
+    """An option can be chosen only once."""
+    response, table = submit(mixed_answers(q2=["x", "y", "x"]))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "duplicate_option"
+    assert not table.items
+
+
+@pytest.mark.unit
+def test_multiple_choice_with_no_selection_counts_as_unanswered():
+    """Every question is required, so an empty selection is missing."""
+    response, table = submit(mixed_answers(q2=[]))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "missing_answer"
+    assert not table.items
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("x", id="bare-string"),
+        pytest.param("xy", id="string-that-spells-two-options"),
+        pytest.param([1], id="list-of-numbers"),
+        pytest.param([["x"]], id="nested-list"),
+        pytest.param(None, id="null"),
+        pytest.param({"x": 1}, id="object"),
+        pytest.param(5, id="number"),
+    ],
+)
+def test_multiple_choice_needs_a_list_of_option_ids(value):
+    """Anything other than a list of strings is an invalid answer."""
+    response, table = submit(mixed_answers(q2=value))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "invalid_answer"
+    assert not table.items
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("rating", [1, 3, 5])
+def test_ratings_within_bounds_are_accepted(rating):
+    """The bounds are inclusive."""
+    response, table = submit(mixed_answers(q3=rating))
+
+    assert response["statusCode"] == 201
+    assert table.items[0]["answers"]["q3"] == rating
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("rating", [0, 6, -1, 100])
+def test_ratings_outside_bounds_are_rejected(rating):
+    """A rating outside the question's min and max is out of range."""
+    response, table = submit(mixed_answers(q3=rating))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "rating_out_of_range"
+    assert not table.items
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(3.5, id="fraction"),
+        pytest.param(3.0, id="whole-number-written-as-a-float"),
+        pytest.param("4", id="string"),
+        pytest.param(True, id="true"),
+        pytest.param(False, id="false"),
+        pytest.param(None, id="null"),
+        pytest.param([3], id="list"),
+        pytest.param({"v": 3}, id="object"),
+    ],
+)
+def test_a_rating_must_be_a_whole_number(value):
+    """Only a JSON integer is a rating; true counts as invalid, not as 1."""
+    response, table = submit(mixed_answers(q3=value))
+
+    assert response["statusCode"] == 400
+    assert reason_of(response) == "invalid_answer"
+    assert not table.items
+
+
+def valid_answers_for(poll):
+    """One valid answer per question, built from the question's own shape."""
+    answers = {}
+    for question in poll["questions"]:
+        if question["type"] == "multi":
+            answers[question["id"]] = [question["options"][0]["id"]]
+        elif question["type"] == "rating":
+            answers[question["id"]] = question["min"]
+        else:
+            answers[question["id"]] = question["options"][0]["id"]
+    return answers
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "poll_id",
+    sorted(handler.load_definitions(handler.BUNDLED_DEFINITIONS_DIR)),
+)
+def test_every_bundled_poll_accepts_a_valid_submission(poll_id):
+    """Each poll shipped with the function can take a response."""
+    definitions = handler.load_definitions(handler.BUNDLED_DEFINITIONS_DIR)
+    table = FakeTable()
+
+    response = handler.handle(
+        post_event(
+            {
+                "pollId": poll_id,
+                "answers": valid_answers_for(definitions[poll_id]),
+            }
+        ),
+        table=table,
+        definitions=definitions,
+        now=lambda: NOW,
+    )
+
+    assert response["statusCode"] == 201
+    assert len(table.items) == 1

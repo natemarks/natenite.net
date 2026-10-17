@@ -37,3 +37,38 @@ test('prepareSubmission signs exactly the body it returns', async () => {
       '30e7364294346df8490dc572520d65764a4640f19829b0dc0ffa2ee23bf7b082',
   });
 });
+
+const QUESTIONS = [
+  { id: 'q1', type: 'single' },
+  { id: 'q2', type: 'multi' },
+  { id: 'q3', type: 'rating', min: 0, max: 5 }
+];
+
+test('missingQuestions is empty when every question is answered', () => {
+  assert.deepEqual(
+    lib.missingQuestions(QUESTIONS, { q1: 'a', q2: ['x'], q3: 4 }),
+    []
+  );
+});
+
+test('missingQuestions names each unanswered question', () => {
+  assert.deepEqual(lib.missingQuestions(QUESTIONS, {}), ['q1', 'q2', 'q3']);
+  assert.deepEqual(
+    lib.missingQuestions(QUESTIONS, { q1: 'a', q3: 2 }),
+    ['q2']
+  );
+});
+
+test('an empty multiple-choice selection counts as unanswered', () => {
+  assert.deepEqual(
+    lib.missingQuestions(QUESTIONS, { q1: 'a', q2: [], q3: 2 }),
+    ['q2']
+  );
+});
+
+test('a rating of zero is an answer, not a missing one', () => {
+  assert.deepEqual(
+    lib.missingQuestions(QUESTIONS, { q1: 'a', q2: ['x'], q3: 0 }),
+    []
+  );
+});

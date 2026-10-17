@@ -35,5 +35,26 @@
     };
   }
 
-  return { sha256Hex: sha256Hex, prepareSubmission: prepareSubmission };
+  // IDs of the questions that have no answer yet. A multiple-choice question
+  // needs at least one selection; a rating of 0 is a real answer.
+  function missingQuestions(questions, answers) {
+    return questions
+      .filter(function (question) {
+        var answer = answers[question.id];
+        if (question.type === 'multi') {
+          return !Array.isArray(answer) || answer.length === 0;
+        }
+        if (question.type === 'rating') {
+          return typeof answer !== 'number';
+        }
+        return typeof answer !== 'string' || answer === '';
+      })
+      .map(function (question) { return question.id; });
+  }
+
+  return {
+    sha256Hex: sha256Hex,
+    prepareSubmission: prepareSubmission,
+    missingQuestions: missingQuestions
+  };
 });
