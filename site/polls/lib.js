@@ -185,7 +185,98 @@
       'If someone else is using this browser, you can answer too.';
   }
 
+  // Whether a failed attempt is worth repeating after a short wait. An outcome
+  // is { status, reason } from the server, or { networkError: true } when no
+  // answer came back at all.
+  function isRetryable(outcome) {
+    if (outcome.networkError) {
+      return true;
+    }
+    if (outcome.status === 429) {
+      return true;
+    }
+    // The answers are already saved when only the email was lost; retrying
+    // would store the response a second time.
+    return outcome.status >= 500 && outcome.reason !== 'email_not_stored';
+  }
+
+  // Retries made after the first attempt: at most this many.
+  var MAX_RETRIES = 3;
+
+  // Milliseconds to wait before retry number `retryNumber` (1, 2, 3...):
+  // 1s, 2s, 4s, each spread by up to 25% either way (jitter) so visitors
+  // who hit a limit together do not all retry together. `random` returns a
+  // number in [0, 1); it is passed in for tests.
+  function retryDelayMs(retryNumber, random) {
+    var base = 1000 * Math.pow(2, retryNumber - 1);
+    return Math.round(base * (0.75 + 0.5 * random()));
+  }
+
+  // Try `send` (which resolves to an outcome, or rejects if the request
+  // failed outright), repeating after a wait while the failure is worth
+  // repeating, up to MAX_RETRIES times. `sleep(ms)` and `random` are passed in
+  // for tests; `onRetry(retryNumber, delayMs)` is called before each wait so
+  // the page can say what it is doing.
+  async function sendWithRetries(send, sleep, random, onRetry) {
+    var attempts = 0;
+    for (;;) {
+      attempts += 1;
+      var outcome;
+      try {
+        outcome = await send();
+      } catch (error) {
+        outcome = { networkError: true };
+      }
+      var retries = attempts - 1;
+      if (!isRetryable(outcome) || retries >= MAX_RETRIES) {
+        return { outcome: outcome, attempts: attempts };
+      }
+      var delay = retryDelayMs(retries + 1, random);
+      if (onRetry) {
+        onRetry(retries + 1, delay);
+      }
+      await sleep(delay);
+    }
+  }
+
+  // Whether to tell the respondent the poll is busy. That covers failures
+  // worth repeating plus a 403, which only the edge returns (a WAF
+  // rate-limit block). A response where only the email was lost is not busy:
+  // the answers were saved.
+  function isBusy(outcome) {
+    if (outcome.status === 500 && outcome.reason === 'email_not_stored') {
+      return false;
+    }
+    return isRetryable(outcome) || outcome.status === 403;
+  }
+
+  var BUSY_MESSAGE =
+    'The poll is busy right now. Your answers are still here. ' +
+    'Please try again in a minute.';
+
+  // The status and (when the body is JSON with a text reason) the reason of
+  // a fetch response. The edge answers with HTML when it blocks a request.
+  async function describeResponse(response) {
+    var outcome = { status: response.status };
+    try {
+      var data = await response.json();
+      if (data && typeof data.reason === 'string') {
+        outcome.reason = data.reason;
+      }
+    } catch (error) {
+      // Not JSON: the status alone is the outcome.
+    }
+    return outcome;
+  }
+
   return {
+    describeResponse: describeResponse,
+    BUSY_MESSAGE: BUSY_MESSAGE,
+    isBusy: isBusy,
+    sendWithRetries: sendWithRetries,
+    MAX_RETRIES: MAX_RETRIES,
+    retryDelayMs: retryDelayMs,
+    isRetryable: isRetryable,
     rememberSubmission: rememberSubmission,
     previousSubmission: previousSubmission,
     answeredNotice: answeredNotice,

@@ -210,6 +210,8 @@
       }
       button.disabled = true;
       status.textContent = 'Sending…';
+      // The request is built (and signed) once; every attempt sends the
+      // same body with the same browser token.
       PollLib.prepareSubmission(
         definition.id,
         answers,
@@ -217,44 +219,61 @@
         PollLib.getBrowserToken(browserStorage(), randomBytes)
       )
         .then(function (prepared) {
-          return fetch('/submit', {
-            method: 'POST',
-            headers: prepared.headers,
-            body: prepared.body
-          });
+          return PollLib.sendWithRetries(
+            function () {
+              return fetch('/submit', {
+                method: 'POST',
+                headers: prepared.headers,
+                body: prepared.body
+              }).then(PollLib.describeResponse);
+            },
+            function (ms) {
+              return new Promise(function (resolve) {
+                setTimeout(resolve, ms);
+              });
+            },
+            Math.random,
+            function (retryNumber) {
+              status.textContent = 'Busy, trying again (' + retryNumber +
+                ' of ' + PollLib.MAX_RETRIES + ')…';
+            }
+          );
         })
-        .then(function (response) {
-          if (response.status === 410) {
-            showMessage('This poll is closed.');
-            return;
-          }
-          if (response.status === 201) {
+        .then(function (result) {
+          var outcome = result.outcome;
+          if (outcome.status === 201) {
             PollLib.rememberSubmission(
               browserStorage(), definition.id, Date.now()
             );
             showMessage('Thank you! Your response was recorded.');
-            return null;
+            return;
           }
-          return response.json().catch(function () {
-            return {};
-          }).then(function (data) {
-            var message = PollLib.rejectionMessage(data.reason);
-            if (data.reason === 'email_not_stored') {
-              // The answers are saved: do not invite a duplicate resubmit.
-              PollLib.rememberSubmission(
-                browserStorage(), definition.id, Date.now()
-              );
-              showMessage(message);
-              return;
-            }
-            var error = new Error('status ' + response.status);
-            error.userMessage = message;
-            throw error;
-          });
-        })
-        .catch(function (error) {
+          if (outcome.status === 410) {
+            showMessage('This poll is closed.');
+            return;
+          }
+          if (outcome.reason === 'email_not_stored') {
+            // The answers are saved: do not invite a duplicate resubmit.
+            PollLib.rememberSubmission(
+              browserStorage(), definition.id, Date.now()
+            );
+            showMessage(PollLib.rejectionMessage('email_not_stored'));
+            return;
+          }
+          // Still here: the form keeps every answer, and the same button
+          // sends it again.
           button.disabled = false;
-          status.textContent = (error && error.userMessage) ||
+          if (PollLib.isBusy(outcome)) {
+            button.textContent = 'Try again';
+            status.textContent = PollLib.BUSY_MESSAGE;
+            return;
+          }
+          status.textContent = PollLib.rejectionMessage(outcome.reason) ||
+            'Sorry, your response could not be sent. Please try again.';
+        })
+        .catch(function () {
+          button.disabled = false;
+          status.textContent =
             'Sorry, your response could not be sent. Please try again.';
         });
     });

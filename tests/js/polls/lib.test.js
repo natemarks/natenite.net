@@ -330,3 +330,201 @@ test('no token means none is sent', async () => {
     assert.equal(prepared.body, plain.body);
   }
 });
+
+test('isRetryable: transient failures are retried, everything else is not', () => {
+  const retried = [
+    { status: 429 },
+    { status: 500 },
+    { status: 502 },
+    { status: 503 },
+    { status: 504 },
+    { networkError: true }
+  ];
+  for (const outcome of retried) {
+    assert.equal(lib.isRetryable(outcome), true, JSON.stringify(outcome));
+  }
+
+  const notRetried = [
+    { status: 201 },
+    { status: 400, reason: 'unknown_option' },
+    { status: 400, reason: 'invalid_email' },
+    { status: 400, reason: 'answer_too_long' },
+    // Only the edge returns 403 (a WAF block or a signing failure): waiting
+    // seconds will not lift a rate-limit window, so it is not retried.
+    { status: 403 },
+    { status: 404, reason: 'unknown_poll' },
+    { status: 405 },
+    { status: 410, reason: 'poll_closed' },
+    { status: 413, reason: 'payload_too_large' }
+  ];
+  for (const outcome of notRetried) {
+    assert.equal(lib.isRetryable(outcome), false, JSON.stringify(outcome));
+  }
+});
+
+test('a 500 saying only the email was lost is never retried', () => {
+  // The answers are already saved: a retry would store a duplicate.
+  assert.equal(
+    lib.isRetryable({ status: 500, reason: 'email_not_stored' }),
+    false
+  );
+});
+
+test('retryDelayMs doubles each retry, starting at about a second', () => {
+  const middle = () => 0.5;  // jitter factor exactly 1
+  assert.equal(lib.retryDelayMs(1, middle), 1000);
+  assert.equal(lib.retryDelayMs(2, middle), 2000);
+  assert.equal(lib.retryDelayMs(3, middle), 4000);
+});
+
+test('retryDelayMs spreads each wait by up to 25 percent either way', () => {
+  const lowest = () => 0;
+  const highest = () => 0.999999;
+  assert.equal(lib.retryDelayMs(1, lowest), 750);
+  assert.equal(lib.retryDelayMs(2, lowest), 1500);
+  assert.equal(lib.retryDelayMs(3, lowest), 3000);
+  assert.equal(lib.retryDelayMs(1, highest), 1250);
+  assert.equal(lib.retryDelayMs(2, highest), 2500);
+  assert.equal(lib.retryDelayMs(3, highest), 5000);
+});
+
+// A send function that answers from a script (an Error means the request
+// failed outright), and a sleep that records the waits without waiting.
+function scripted(outcomes) {
+  const calls = { count: 0 };
+  const send = async () => {
+    const next = outcomes[Math.min(calls.count, outcomes.length - 1)];
+    calls.count += 1;
+    if (next instanceof Error) { throw next; }
+    return next;
+  };
+  return { send, calls };
+}
+
+function recordingSleep() {
+  const delays = [];
+  return { delays, sleep: async (ms) => { delays.push(ms); } };
+}
+
+const MIDDLE = () => 0.5;
+
+test('sendWithRetries: a first-try success makes one attempt and never waits', async () => {
+  const { send } = scripted([{ status: 201 }]);
+  const { sleep, delays } = recordingSleep();
+
+  const result = await lib.sendWithRetries(send, sleep, MIDDLE);
+
+  assert.deepEqual(result, { outcome: { status: 201 }, attempts: 1 });
+  assert.deepEqual(delays, []);
+});
+
+test('sendWithRetries recovers after a throttled attempt', async () => {
+  const { send } = scripted([{ status: 429 }, { status: 201 }]);
+  const { sleep, delays } = recordingSleep();
+
+  const result = await lib.sendWithRetries(send, sleep, MIDDLE);
+
+  assert.deepEqual(result, { outcome: { status: 201 }, attempts: 2 });
+  assert.deepEqual(delays, [1000]);
+});
+
+test('sendWithRetries gives up after three retries, waiting 1s, 2s, 4s', async () => {
+  const { send, calls } = scripted([{ status: 503 }]);
+  const { sleep, delays } = recordingSleep();
+
+  const result = await lib.sendWithRetries(send, sleep, MIDDLE);
+
+  assert.deepEqual(result, { outcome: { status: 503 }, attempts: 4 });
+  assert.equal(calls.count, 4);
+  assert.deepEqual(delays, [1000, 2000, 4000]);
+});
+
+test('sendWithRetries stops at once for errors a retry cannot fix', async () => {
+  for (const outcome of [
+    { status: 400, reason: 'unknown_option' },
+    { status: 403 },
+    { status: 410, reason: 'poll_closed' },
+    { status: 500, reason: 'email_not_stored' }
+  ]) {
+    const { send, calls } = scripted([outcome]);
+    const { sleep, delays } = recordingSleep();
+
+    const result = await lib.sendWithRetries(send, sleep, MIDDLE);
+
+    assert.deepEqual(result, { outcome, attempts: 1 }, JSON.stringify(outcome));
+    assert.equal(calls.count, 1);
+    assert.deepEqual(delays, []);
+  }
+});
+
+test('sendWithRetries treats a failed request as a network error and retries', async () => {
+  const { send } = scripted([new Error('offline'), { status: 201 }]);
+  const { sleep, delays } = recordingSleep();
+
+  const recovered = await lib.sendWithRetries(send, sleep, MIDDLE);
+  assert.deepEqual(recovered, { outcome: { status: 201 }, attempts: 2 });
+  assert.deepEqual(delays, [1000]);
+
+  const stuck = scripted([new Error('offline')]);
+  const result = await lib.sendWithRetries(stuck.send, recordingSleep().sleep, MIDDLE);
+  assert.deepEqual(result, { outcome: { networkError: true }, attempts: 4 });
+});
+
+test('sendWithRetries tells the page about each wait before it happens', async () => {
+  const { send } = scripted([{ status: 429 }, { status: 429 }, { status: 201 }]);
+  const { sleep } = recordingSleep();
+  const waits = [];
+
+  await lib.sendWithRetries(send, sleep, MIDDLE, (retryNumber, delayMs) => {
+    waits.push([retryNumber, delayMs]);
+  });
+
+  assert.deepEqual(waits, [[1, 1000], [2, 2000]]);
+});
+
+test('isBusy covers throttling, server errors, network failures and edge blocks', () => {
+  for (const outcome of [
+    { status: 429 }, { status: 500 }, { status: 503 }, { status: 504 },
+    { networkError: true },
+    { status: 403 }  // a WAF rate-limit block (or a signing failure)
+  ]) {
+    assert.equal(lib.isBusy(outcome), true, JSON.stringify(outcome));
+  }
+  for (const outcome of [
+    { status: 201 },
+    { status: 400, reason: 'invalid_email' },
+    { status: 404 }, { status: 410, reason: 'poll_closed' },
+    { status: 500, reason: 'email_not_stored' }  // saved: not "busy"
+  ]) {
+    assert.equal(lib.isBusy(outcome), false, JSON.stringify(outcome));
+  }
+});
+
+test('the busy message says answers are kept and when to try again', () => {
+  assert.equal(
+    lib.BUSY_MESSAGE,
+    'The poll is busy right now. Your answers are still here. ' +
+      'Please try again in a minute.'
+  );
+});
+
+test('describeResponse reads the status and the reason when there is one', async () => {
+  const reply = (status, body) => ({ status, json: async () => body });
+
+  assert.deepEqual(
+    await lib.describeResponse(reply(201, { responseId: 'X' })),
+    { status: 201 }
+  );
+  assert.deepEqual(
+    await lib.describeResponse(reply(400, { reason: 'invalid_email' })),
+    { status: 400, reason: 'invalid_email' }
+  );
+  // The edge answers with HTML, not JSON, when it blocks a request.
+  const html = { status: 403, json: async () => { throw new SyntaxError('not json'); } };
+  assert.deepEqual(await lib.describeResponse(html), { status: 403 });
+  // A reason that is not a string is ignored.
+  assert.deepEqual(
+    await lib.describeResponse(reply(500, { reason: { nested: true } })),
+    { status: 500 }
+  );
+});
