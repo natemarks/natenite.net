@@ -38,6 +38,11 @@ from aws_cdk import Environment as cdk_environment
 from constructs import Construct
 from config.helper import APP_NAME, PROJECT_ROOT
 from config.settings import EnvironmentSetting, PollsSetting
+from stack.polls_access_log_queries import (
+    LOG_PREFIX,
+    RESULTS_PREFIX,
+    AccessLogQueries,
+)
 from stack.certificate import CertificateStack
 from stack.site import SiteStack
 
@@ -125,7 +130,14 @@ class PollsStack(Stack):
             enforce_ssl=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             removal_policy=RemovalPolicy.RETAIN,
-            lifecycle_rules=[s3.LifecycleRule(expiration=Duration.days(365))],
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    prefix=f"{LOG_PREFIX}/", expiration=Duration.days(365)
+                ),
+                s3.LifecycleRule(
+                    prefix=f"{RESULTS_PREFIX}/", expiration=Duration.days(30)
+                ),
+            ],
         )
         bucket.add_to_resource_policy(
             iam.PolicyStatement(
@@ -174,10 +186,13 @@ class PollsStack(Stack):
             delivery_source_name=source.ref,
             delivery_destination_arn=destination.attr_arn,
             s3_enable_hive_compatible_path=True,
-            s3_suffix_path="{yyyy}/{MM}/{dd}/{HH}",
+            s3_suffix_path="{yyyy}/{MM}/{dd}",
         )
         # Creating a delivery checks it can write, so the policy comes first
         delivery.node.add_dependency(bucket.policy)
+        AccessLogQueries(
+            self, f"{prefix}AccessLogQueries", bucket=bucket, prefix=prefix
+        )
 
     def __init__(
         self,

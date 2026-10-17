@@ -254,6 +254,14 @@ delete-email: .venv ## report records for one address; add yes=1 to delete them 
        PYTHONPATH="." python3 scripts/manage_emails.py --app-env $(app_env) delete --email '$(email)' $(if $(yes),--yes,); \
     )
 
+query-logs: .venv ## print the routine access-log queries as JSON, 90 days by default (make query-logs days=30)
+	( \
+       source scripts/enable_pyenv.sh; \
+       pyenv local $(PYTHON_VERSION); \
+       source .venv/bin/activate; \
+       PYTHONPATH="." python3 scripts/query_logs.py --app-env $(app_env) $(if $(days),--days $(days),); \
+    )
+
 discover: .venv ## update environment config data with discovered information
 	( \
        source scripts/enable_pyenv.sh; \

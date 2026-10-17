@@ -514,8 +514,9 @@ def test_access_logs_go_to_a_private_bucket_that_expires_them_after_a_year():
         "RestrictPublicBuckets": True,
     }
     rules = props["LifecycleConfiguration"]["Rules"]
-    assert [(rule["Status"], rule["ExpirationInDays"]) for rule in rules] == [
-        ("Enabled", 365)
+    assert ("Enabled", 365, "cloudfront/polls/") in [
+        (rule["Status"], rule["ExpirationInDays"], rule.get("Prefix"))
+        for rule in rules
     ]
     assert bucket["DeletionPolicy"] == "Retain"
 
@@ -582,7 +583,7 @@ def test_the_distribution_delivers_json_access_logs_to_the_log_bucket():
     }
     assert props["S3EnableHiveCompatiblePath"] is True
     # Hive paths only apply to the variables of an explicit suffix path
-    assert props["S3SuffixPath"] == "{yyyy}/{MM}/{dd}/{HH}"
+    assert props["S3SuffixPath"] == "{yyyy}/{MM}/{dd}"
 
 
 @pytest.mark.unit
