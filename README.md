@@ -134,6 +134,83 @@ pipeline before CDK commands to always use the latest discovered data.
 
 
 
+## Polls
+
+Simple public polls served at `polls.natenite.net/<poll-id>`. A respondent
+answers a poll's questions and may leave an email address; only the owner
+reads the data. Terms are defined in [CONTEXT.md](./CONTEXT.md), the reasons
+for the hosting choice are in
+[ADR 0001](./docs/adr/0001-lambda-function-url-with-cloudfront-oac.md), and
+the full requirements are in the
+[spec](./.scratch/wayfinder/poll-app/spec.md).
+
+### Add a poll
+
+1. **Write the definition** as `polls/<poll-id>.json`. The file name must
+   match the `id`. `polls/poll2.json` is an example with every question type.
+2. **Run the unit tests** with `make unit-test`. They check every file in
+   `polls/`, so a mistake (a duplicate option, a rating range that is too
+   wide, a poll too big to submit) fails here, before anything is deployed.
+3. **Preview** the change with `make diff-polls`. Adding a poll should change
+   the poll files (the definitions upload and the function bundle).
+4. **Deploy** with `make deploy-polls`. It runs the unit tests first.
+5. **Check the live page.** Open `https://polls.natenite.net/<poll-id>`,
+   answer it, then run `make dump-poll poll=<poll-id>` to see the stored
+   response. Test responses stay in the table, so expect to see your own.
+
+To change a poll that is already open, edit its file and raise `version`
+(each stored response records the version it answered). To stop taking
+responses, add `closesAt`; to unpublish a poll, delete its file and deploy.
+
+### Poll definition format
+
+```json
+{
+  "id": "poll-id",
+  "title": "Shown at the top of the page",
+  "version": 1,
+  "closesAt": "2026-12-31T23:59:59Z",
+  "questions": [ ... ]
+}
+```
+
+| Field | Rule |
+| --- | --- |
+| `id` | Lower-case letters, digits and hyphens; equals the file name. |
+| `title` | Non-empty text. |
+| `version` | Whole number, at least 1. |
+| `closesAt` | Optional, UTC, exactly as above. After it the page says the poll is closed and submissions are refused. |
+| `questions` | A non-empty list. Each has a `prompt`, a `type`, and an `id` that starts with a lower-case letter and uses letters, digits and underscores. |
+
+Question types:
+
+- `single` and `multi`: `options`, at least two, each with an `id` and a
+  `label`. A `multi` answer is a list of option IDs.
+- `rating`: whole-number `min` and `max`, at most 10 steps apart.
+- `text`: free text, up to 500 characters.
+
+A submission body may not exceed 6 KB, so a poll can hold at most two
+free-text questions. The email address, if given, is stored as a separate
+record and is never included in `make dump-poll`.
+
+### Checking on it
+
+These are all run by the owner; nothing here is automatic.
+
+- `make dump-poll poll=<poll-id>`: the stored responses, as JSON.
+- `make query-logs [days=90]`: the routine CloudFront log queries (errors by
+  day, busiest client addresses, requests blocked or throttled) as one JSON
+  document, for reading or for automation. The same three queries are saved
+  in the Athena workgroup `NateNiteProductionPolls-access-logs`.
+- Four saved CloudWatch Logs Insights queries (rejections by reason, errors,
+  submissions per day, recent requests) search the submit function's log.
+- `make purge-emails days=365` and `make delete-email email=<address>` report
+  what they would remove; add `yes=1` to do it.
+
+Submissions are limited to about 20 per five minutes from one address; the
+limit is an estimate by the web firewall, not an exact count. The function's
+logs and the access logs are each kept for a year.
+
 ## Contributing
 
 If you'd like to contribute to this project read

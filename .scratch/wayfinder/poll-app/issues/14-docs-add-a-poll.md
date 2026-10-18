@@ -14,9 +14,9 @@ Document the routine for adding a poll and where the decisions live.
 
 ## Acceptance criteria
 
-- [ ] The README explains how to add a poll: write the definition file, run the unit tests, preview, deploy, and check the live page.
-- [ ] It links to ADR 0001, the glossary and the spec, and states the poll definition format.
-- [ ] It notes the owner scripts and the saved queries for the periodic check.
+- [x] The README explains how to add a poll: write the definition file, run the unit tests, preview, deploy, and check the live page.
+- [x] It links to ADR 0001, the glossary and the spec, and states the poll definition format.
+- [x] It notes the owner scripts and the saved queries for the periodic check.
 
 ## Blocked by
 
