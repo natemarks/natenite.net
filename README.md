@@ -147,7 +147,8 @@ the full requirements are in the
 ### Add a poll
 
 1. **Write the definition** as `polls/<poll-id>.json`. The file name must
-   match the `id`. `polls/poll2.json` is an example with every question type.
+   match the `id`. `docs/examples/all-question-types.json` shows every
+   question type (it is not published; only `polls/` is).
 2. **Run the unit tests** with `make unit-test`. They check every file in
    `polls/`, so a mistake (a duplicate option, a rating range that is too
    wide, a poll too big to submit) fails here, before anything is deployed.

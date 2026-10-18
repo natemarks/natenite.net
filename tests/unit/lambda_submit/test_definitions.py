@@ -346,7 +346,13 @@ def test_a_choice_question_with_very_many_options_exceeds_the_budget():
     assert_problem(change, "body")
 
 
-POLL_FILES = sorted((PROJECT_ROOT / "polls").glob("*.json"))
+# The published polls and the examples kept for the README
+POLL_FILES = sorted(
+    [
+        *(PROJECT_ROOT / "polls").glob("*.json"),
+        *(PROJECT_ROOT / "docs" / "examples").glob("*.json"),
+    ]
+)
 
 
 @pytest.mark.unit

@@ -230,7 +230,7 @@ cdk-bootstrap: node_modules .venv ## bootstrap the default account and region fo
     )
 
 
-dump-poll: .venv ## print one poll's responses as JSON (make dump-poll poll=poll1)
+dump-poll: .venv ## print one poll's responses as JSON (make dump-poll poll=<poll-id>)
 	( \
        source scripts/enable_pyenv.sh; \
        pyenv local $(PYTHON_VERSION); \

@@ -296,26 +296,59 @@ def test_definitions_are_loaded_by_poll_id(tmp_path):
     assert loaded["poll2"]["title"] == "Another poll"
 
 
+def a_valid_answer(question):
+    """Some answer the poll's question accepts, whatever its type."""
+    if question["type"] == "single":
+        return question["options"][0]["id"]
+    if question["type"] == "multi":
+        return [question["options"][0]["id"]]
+    if question["type"] == "rating":
+        return question["min"]
+    return "a short answer"
+
+
 @pytest.mark.unit
-def test_bundled_definitions_accept_a_valid_submission():
-    """The definitions shipped with the function can take a response."""
+def test_every_bundled_definition_accepts_a_valid_submission():
+    """Each definition shipped with the function can take a response."""
     definitions = handler.load_definitions(handler.BUNDLED_DEFINITIONS_DIR)
-    poll = definitions["poll1"]
-    answers = {
-        question["id"]: question["options"][0]["id"]
-        for question in poll["questions"]
-    }
-    table = FakeTable()
+    assert definitions
+    for poll_id, poll in definitions.items():
+        answers = {
+            question["id"]: a_valid_answer(question)
+            for question in poll["questions"]
+        }
+        table = FakeTable()
 
-    response = handler.handle(
-        post_event({"pollId": "poll1", "answers": answers}),
-        table=table,
-        definitions=definitions,
-        now=lambda: open_time_for(poll),
+        response = handler.handle(
+            post_event({"pollId": poll_id, "answers": answers}),
+            table=table,
+            definitions=definitions,
+            now=lambda poll=poll: open_time_for(poll),
+        )
+
+        assert response["statusCode"] == 201, poll_id
+        assert table.items[0]["pollVersion"] == poll["version"]
+
+
+@pytest.mark.unit
+def test_the_launch_poll_offers_the_four_november_dates_until_the_15th():
+    """The poll as the owner specified it (their wording, their dates)."""
+    definitions = handler.load_definitions(handler.BUNDLED_DEFINITIONS_DIR)
+    poll = definitions["nov20267s-in-603"]
+    assert poll["title"] == (
+        "Lacrosse 7s in the 603: which dates can you make?"
     )
-
-    assert response["statusCode"] == 201
-    assert table.items[0]["pollVersion"] == poll["version"]
+    (question,) = poll["questions"]
+    assert question["type"] == "multi"
+    assert [option["label"] for option in question["options"]] == [
+        "Saturday 11/7",
+        "Sunday 11/8",
+        "Saturday 11/14",
+        "Sunday 11/15",
+    ]
+    # End of 11/15 US Eastern (standard time by then, UTC-5)
+    assert poll["closesAt"] == "2026-11-16T04:59:59Z"
+    assert sorted(definitions) == ["nov20267s-in-603"]
 
 
 @pytest.mark.unit

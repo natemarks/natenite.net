@@ -179,7 +179,8 @@
     emailNotice.id = 'email-notice';
     emailNotice.className = 'note';
     emailNotice.textContent =
-      ' Optional. We keep your address until you ask us to remove it.';
+      ' Optional. We use your address only to coordinate and promote' +
+      ' lacrosse events, and keep it until you ask us to remove it.';
     emailBox.appendChild(emailLabel);
     emailBox.appendChild(document.createElement('br'));
     emailBox.appendChild(emailInput);
