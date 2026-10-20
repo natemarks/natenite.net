@@ -22,6 +22,7 @@ from aws_cdk import App, Environment, Tags
 from config.settings import EnvironmentSetting, get_actual_path
 from config.helper import check_aws_account, check_app_env
 from stack.certificate import CertificateInput, CertificateStack
+from stack.polls import PollsInput, PollsStack
 from stack.site import SiteInput, SiteStack
 
 
@@ -39,7 +40,9 @@ class Inventory:
         check_aws_account(app_env)
         self.data_path = get_actual_path(app_env)
         self.app_env = app_env
-        self.unique_stacks: dict[str, CertificateStack | SiteStack] = {}
+        self.unique_stacks: dict[
+            str, CertificateStack | SiteStack | PollsStack
+        ] = {}
         self.environment_setting = EnvironmentSetting.from_data_path(
             self.data_path
         )
@@ -51,10 +54,17 @@ class Inventory:
             cdk_env,
             termination_protection=self.TERMINATION_PROTECTION,
         )
-        self.site_stack(
+        site_stack = self.site_stack(
             app,
             cdk_env,
             cert_stack,
+            termination_protection=self.TERMINATION_PROTECTION,
+        )
+        self.polls_stack(
+            app,
+            cdk_env,
+            cert_stack,
+            site_stack,
             termination_protection=self.TERMINATION_PROTECTION,
         )
 
@@ -97,6 +107,30 @@ class Inventory:
             termination_protection=termination_protection,
         )
         return self.unique_stacks["site"]
+
+    def polls_stack(
+        self,
+        app: App,
+        cdk_env: Environment,
+        certificate_stack: CertificateStack,
+        site_stack: SiteStack,
+        termination_protection: bool,
+    ) -> PollsStack:
+        """Create and register the single Polls stack for this env.
+
+        The Certificate and Site stacks must already exist because Polls
+        uses the certificate and the web ACL.
+        """
+        s_input = PollsInput.from_config_directory(self.data_path)
+        self.unique_stacks["polls"] = PollsStack(
+            scope=app,
+            cdk_env=cdk_env,
+            s_input=s_input,
+            certificate_stack=certificate_stack,
+            site_stack=site_stack,
+            termination_protection=termination_protection,
+        )
+        return self.unique_stacks["polls"]
 
 
 class DevInventory(Inventory):

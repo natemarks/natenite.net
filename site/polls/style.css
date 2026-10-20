@@ -1,0 +1,294 @@
+/* Matches natenite.net: the same colours, fonts, header, buttons and footer
+   as its Hugo theme (hugo-serif-theme), which has no dark mode. */
+:root {
+  --primary: #4682b4;
+  --primary-light: #6a9ac4;
+  --black: #2f2f41;
+  --grey: #5c5a5a;
+  --offset: #f6f7ff;
+  --error: #b00020;
+  --font-base: "Source Sans Pro", Helvetica, Arial, sans-serif;
+  --font-heading: "Playfair Display", serif;
+  --gutter: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-base);
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--grey);
+  background: #fff;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.container {
+  width: 100%;
+  margin: 0 auto;
+  padding-left: var(--gutter);
+  padding-right: var(--gutter);
+}
+
+/* The theme's container widths, so the header and footer line up with the
+   main site's */
+@media (min-width: 576px) {
+  .container {
+    max-width: 566px;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 740px;
+  }
+}
+
+@media (min-width: 992px) {
+  .container {
+    max-width: 960px;
+  }
+}
+
+@media (min-width: 1300px) {
+  .container {
+    max-width: 1140px;
+  }
+}
+
+/* Header: white, logo left, menu right */
+.header {
+  background: #fff;
+  border-bottom: 1px solid var(--offset);
+  padding: 10px 0;
+}
+
+.header .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.header .logo,
+.header .logo-mobile {
+  display: block;
+}
+
+.header .logo img,
+.header .logo-mobile img {
+  display: block;
+  width: auto;
+  height: 36px;
+}
+
+.header .logo-mobile {
+  display: block;
+}
+
+.header .logo {
+  display: none;
+}
+
+@media (min-width: 576px) {
+  .header .logo {
+    display: block;
+  }
+
+  .header .logo-mobile {
+    display: none;
+  }
+}
+
+.header ul,
+.footer ul {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.header li a {
+  display: inline-block;
+  padding: 10px 12px;
+}
+
+/* Page */
+main {
+  flex: 1 0 auto;
+  padding-top: 30px;
+  padding-bottom: 40px;
+}
+
+/* A readable line length, left-aligned with the logo like the main site */
+main > * {
+  max-width: 40rem;
+}
+
+p {
+  line-height: 26px;
+  margin: 0 0 20px;
+}
+
+h1 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.2;
+  color: var(--black);
+  margin: 0 0 20px;
+}
+
+@media (min-width: 768px) {
+  h1 {
+    font-size: 32px;
+  }
+}
+
+fieldset {
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--black);
+  margin-bottom: 0.5rem;
+  padding: 0;
+}
+
+label {
+  display: block;
+  padding: 0.5rem 0;
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--primary);
+  margin-right: 0.5rem;
+}
+
+textarea,
+input[type="email"] {
+  font: inherit;
+  color: var(--black);
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #c9ccd6;
+  border-radius: 4px;
+  background: #fff;
+}
+
+textarea {
+  width: 100%;
+}
+
+textarea:focus,
+input[type="email"]:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+
+input[type="email"] {
+  width: 20rem;
+}
+
+button {
+  font-family: var(--font-base);
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--black);
+  outline-offset: 2px;
+}
+
+.note {
+  color: var(--grey);
+}
+
+.over {
+  color: var(--error);
+  font-weight: 700;
+}
+
+/* Footer: blue bar with the site title and links */
+.footer {
+  background: var(--primary);
+  padding: 15px 0;
+}
+
+.footer .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+
+.footer-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.footer li a {
+  display: inline-block;
+  padding: 10px 8px;
+  color: #fff;
+}
+
+/* The email box: label, field, then its notice underneath */
+label[for="respondent-email"] {
+  padding-bottom: 0.25rem;
+}
+
+label[for="respondent-email"] + br {
+  display: none;
+}
+
+#email-notice {
+  display: block;
+  margin-top: 0.5rem;
+}

@@ -33,7 +33,7 @@ from aws_cdk.aws_cloudfront_origins import S3BucketOrigin
 from aws_cdk import Environment as cdk_environment
 from constructs import Construct
 from config.helper import APP_NAME
-from config.settings import EnvironmentSetting
+from config.settings import EnvironmentSetting, PollsSetting
 from stack.certificate import CertificateStack
 
 
@@ -42,6 +42,11 @@ class SiteInput:
     """Typed input payload for `SiteStack`."""
 
     env_setting: EnvironmentSetting
+    polls_setting: PollsSetting
+
+    def polls_fqdn(self) -> str:
+        """Return the polls host name the shared ACL rate limits."""
+        return self.polls_setting.fqdn(self.env_setting.default_fqdn)
 
     def prefix(self) -> str:
         """Return the stack/resource prefix for this environment."""
@@ -53,7 +58,24 @@ class SiteInput:
 
         return cls(
             env_setting=EnvironmentSetting.from_data_path(data_path),
+            polls_setting=PollsSetting.from_data_path(data_path),
         )
+
+
+def _byte_match(field, search_string, transform):
+    """A statement matching `field` exactly against `search_string`."""
+    return wafv2.CfnWebACL.StatementProperty(
+        byte_match_statement=wafv2.CfnWebACL.ByteMatchStatementProperty(
+            field_to_match=field,
+            positional_constraint="EXACTLY",
+            search_string=search_string,
+            text_transformations=[
+                wafv2.CfnWebACL.TextTransformationProperty(
+                    priority=0, type=transform
+                )
+            ],
+        )
+    )
 
 
 class SiteStack(Stack):
@@ -68,6 +90,52 @@ class SiteStack(Stack):
     Dependencies:
     - CertificateStack (for certificate and domain)
     """
+
+    def _polls_submit_rate_rule(self) -> wafv2.CfnWebACL.RuleProperty:
+        """Rate limit submissions to the polls site, per address.
+
+        Only POST requests to /submit on the polls host are counted, so page
+        views and this site's own traffic are never affected. It comes first
+        (priority 0): WAF stops at the first rule that blocks, so a later rule
+        would never count the requests an earlier one blocked.
+        """
+        polls = self.s_input.polls_setting
+        field = wafv2.CfnWebACL.FieldToMatchProperty
+        return wafv2.CfnWebACL.RuleProperty(
+            name="PollsSubmitRateLimit",
+            priority=0,
+            action=wafv2.CfnWebACL.RuleActionProperty(block={}),
+            statement=wafv2.CfnWebACL.StatementProperty(
+                rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(
+                    aggregate_key_type="IP",
+                    limit=polls.rate_limit,
+                    evaluation_window_sec=polls.rate_window_seconds,
+                    scope_down_statement=wafv2.CfnWebACL.StatementProperty(
+                        and_statement=wafv2.CfnWebACL.AndStatementProperty(
+                            statements=[
+                                _byte_match(
+                                    # CDK passes this field through as raw JSON,
+                                    # so the key must be spelled as
+                                    # CloudFormation spells it: "Name".
+                                    field(single_header={"Name": "host"}),
+                                    self.s_input.polls_fqdn(),
+                                    "LOWERCASE",
+                                ),
+                                _byte_match(
+                                    field(uri_path={}), "/submit", "NONE"
+                                ),
+                                _byte_match(field(method={}), "POST", "NONE"),
+                            ]
+                        )
+                    ),
+                )
+            ),
+            visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
+                cloud_watch_metrics_enabled=True,
+                metric_name="PollsSubmitRateLimit",
+                sampled_requests_enabled=True,
+            ),
+        )
 
     def __init__(
         self,
@@ -128,6 +196,7 @@ class SiteStack(Stack):
                 sampled_requests_enabled=True,
             ),
             rules=[
+                self._polls_submit_rate_rule(),
                 wafv2.CfnWebACL.RuleProperty(
                     name="AWSManagedRulesCommonRuleSet",
                     priority=1,

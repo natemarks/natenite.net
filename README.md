@@ -134,6 +134,12 @@ pipeline before CDK commands to always use the latest discovered data.
 
 
 
+## Polls
+
+Simple public polls at `polls.natenite.net/<poll-id>`, run from
+**[POLLS.md](./POLLS.md)**, the owner's guide to adding and closing polls,
+reading results and checking for problems.
+
 ## Contributing
 
 If you'd like to contribute to this project read

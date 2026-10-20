@@ -1,0 +1,19 @@
+{
+  "id": "nov20267s-in-603",
+  "title": "Lacrosse 7s in the 603: which dates can you make?",
+  "version": 1,
+  "closesAt": "2026-11-16T04:59:59Z",
+  "questions": [
+    {
+      "id": "dates",
+      "type": "multi",
+      "prompt": "Select every date you can make.",
+      "options": [
+        { "id": "sat-nov-7", "label": "Saturday 11/7" },
+        { "id": "sun-nov-8", "label": "Sunday 11/8" },
+        { "id": "sat-nov-14", "label": "Saturday 11/14" },
+        { "id": "sun-nov-15", "label": "Sunday 11/15" }
+      ]
+    }
+  ]
+}

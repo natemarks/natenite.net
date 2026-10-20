@@ -7,7 +7,7 @@ Purpose:
 
 import pytest
 
-from config.settings import EnvironmentSetting, get_actual_path
+from config.settings import EnvironmentSetting, PollsSetting, get_actual_path
 from tests.unit.config.settings._shared import APP_ENVS, expected_config_path
 
 
@@ -29,3 +29,13 @@ def test_environment_factory_reads_expected_environment():
 
     assert isinstance(result, EnvironmentSetting)
     assert result.app_env == "production"
+
+
+@pytest.mark.unit
+def test_polls_setting_reads_production_subdomain():
+    """PollsSetting.from_data_path returns the polls subdomain."""
+    data_path = get_actual_path("production")
+    result = PollsSetting.from_data_path(data_path)
+
+    assert isinstance(result, PollsSetting)
+    assert result.subdomain == "polls"

@@ -1,0 +1,885 @@
+{
+  "Resources": {
+    "NateNiteProductionPollsBucket1D2D374E": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "BucketName": "natenite-production-polls-site-content",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true"
+          },
+          {
+            "Key": "aws-cdk:cr-owned:definitions:975322c0",
+            "Value": "true"
+          },
+          {
+            "Key": "aws-cdk:cr-owned:f5c690f4",
+            "Value": "true"
+          }
+        ]
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "NateNiteProductionPollsBucketPolicyE9E707D2": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "NateNiteProductionPollsBucket1D2D374E"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn"
+                  ]
+                }
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "NateNiteProductionPollsBucket1D2D374E",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "NateNiteProductionPollsBucket1D2D374E",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": "s3:GetObject",
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition"
+                        },
+                        ":cloudfront::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":distribution/",
+                        {
+                          "Ref": "NateNiteProductionPollsDistribution8F8C8E68"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "NateNiteProductionPollsBucket1D2D374E",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
+    },
+    "NateNiteProductionPollsBucketAutoDeleteObjectsCustomResourceC8D49823": {
+      "Type": "Custom::S3AutoDeleteObjects",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn"
+          ]
+        },
+        "BucketName": {
+          "Ref": "NateNiteProductionPollsBucket1D2D374E"
+        }
+      },
+      "DependsOn": [
+        "NateNiteProductionPollsBucketPolicyE9E707D2"
+      ],
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+          }
+        ]
+      }
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-605560722292-us-east-1",
+          "S3Key": "ASSET_HASH.zip"
+        },
+        "Timeout": 900,
+        "MemorySize": 128,
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs24.x",
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Lambda function for auto-deleting objects in ",
+              {
+                "Ref": "NateNiteProductionPollsBucket1D2D374E"
+              },
+              " S3 bucket."
+            ]
+          ]
+        }
+      },
+      "DependsOn": [
+        "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+      ]
+    },
+    "NateNiteProductionPollsResponsesTable66B41D68": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sk",
+            "AttributeType": "S"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": true,
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+          }
+        ],
+        "TableName": "natenite-production-polls-responses"
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "NateNiteProductionPollsSubmitLogGroup5C4BB9CB": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/natenite/production/polls/submit",
+        "RetentionInDays": 365
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "NateNiteProductionPollsSubmitFunctionServiceRole6E8F580B": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "NateNiteProductionPollsSubmitFunctionServiceRoleDefaultPolicyBB30067A": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "dynamodb:PutItem",
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "NateNiteProductionPollsResponsesTable66B41D68",
+                    "Arn"
+                  ]
+                }
+              ]
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "NateNiteProductionPollsSubmitFunctionServiceRoleDefaultPolicyBB30067A",
+        "Roles": [
+          {
+            "Ref": "NateNiteProductionPollsSubmitFunctionServiceRole6E8F580B"
+          }
+        ]
+      }
+    },
+    "NateNiteProductionPollsSubmitFunctionEB7AE1B2": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-605560722292-us-east-1",
+          "S3Key": "ASSET_HASH.zip"
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "NateNiteProductionPollsResponsesTable66B41D68"
+            }
+          }
+        },
+        "Handler": "handler.handler",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "NateNiteProductionPollsSubmitLogGroup5C4BB9CB"
+          }
+        },
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "NateNiteProductionPollsSubmitFunctionServiceRole6E8F580B",
+            "Arn"
+          ]
+        },
+        "Runtime": "python3.12",
+        "Timeout": 10
+      },
+      "DependsOn": [
+        "NateNiteProductionPollsSubmitFunctionServiceRoleDefaultPolicyBB30067A",
+        "NateNiteProductionPollsSubmitFunctionServiceRole6E8F580B"
+      ]
+    },
+    "NateNiteProductionPollsSubmitFunctionFunctionUrlF7E6ABF3": {
+      "Type": "AWS::Lambda::Url",
+      "Properties": {
+        "AuthType": "AWS_IAM",
+        "TargetFunctionArn": {
+          "Fn::GetAtt": [
+            "NateNiteProductionPollsSubmitFunctionEB7AE1B2",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "NateNiteProductionPollsPollPageRewriteFunctionFC220441": {
+      "Type": "AWS::CloudFront::Function",
+      "Properties": {
+        "AutoPublish": true,
+        "FunctionCode": "\nfunction handler(event) {\n    var request = event.request;\n    var lastSegment = request.uri.split('/').pop();\n    if (lastSegment.indexOf('.') === -1) {\n        request.uri = '/index.html';\n    }\n    return request;\n}\n            ",
+        "FunctionConfig": {
+          "Comment": "Serve the shared poll page for poll addresses",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "Name": "us-east-1NateNiteProductieRewriteFunction97006271"
+      }
+    },
+    "NateNiteProductionPollsDistributionOrigin1S3OriginAccessControl059FF0D4": {
+      "Type": "AWS::CloudFront::OriginAccessControl",
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": "NateNiteProductionPollsStackOrigin1S3OriginAccessControl948B2804",
+          "OriginAccessControlOriginType": "s3",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4"
+        }
+      }
+    },
+    "NateNiteProductionPollsDistributionOrigin2FunctionUrlOriginAccessControlEF6BFBFD": {
+      "Type": "AWS::CloudFront::OriginAccessControl",
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": "NateNiteProductionPollsStacknctionUrlOriginAccessControlD84B5FC2",
+          "OriginAccessControlOriginType": "lambda",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4"
+        }
+      }
+    },
+    "NateNiteProductionPollsDistributionOrigin2InvokeFromApiForNateNiteProductionPollsStackNateNiteProductionPollsDistributionOrigin2A83766B8E6607529": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunctionUrl",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "NateNiteProductionPollsSubmitFunctionFunctionUrlF7E6ABF3",
+            "FunctionArn"
+          ]
+        },
+        "Principal": "cloudfront.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":cloudfront::",
+              {
+                "Ref": "AWS::AccountId"
+              },
+              ":distribution/",
+              {
+                "Ref": "NateNiteProductionPollsDistribution8F8C8E68"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "NateNiteProductionPollsDistributionOrigin2InvokeFunctionFromCloudFrontForNateNiteProductionPollsStackNateNiteProductionPollsDistributionOrigin2A83766B8224ABFF4": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "NateNiteProductionPollsSubmitFunctionFunctionUrlF7E6ABF3",
+            "FunctionArn"
+          ]
+        },
+        "InvokedViaFunctionUrl": true,
+        "Principal": "cloudfront.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":cloudfront::",
+              {
+                "Ref": "AWS::AccountId"
+              },
+              ":distribution/",
+              {
+                "Ref": "NateNiteProductionPollsDistribution8F8C8E68"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "NateNiteProductionPollsDistribution8F8C8E68": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Aliases": [
+            "polls.natenite.net"
+          ],
+          "CacheBehaviors": [
+            {
+              "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "OPTIONS",
+                "PUT",
+                "PATCH",
+                "POST",
+                "DELETE"
+              ],
+              "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+              "Compress": true,
+              "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+              "PathPattern": "/submit",
+              "TargetOriginId": "NateNiteProductionPollsStackNateNiteProductionPollsDistributionOrigin2A83766B8",
+              "ViewerProtocolPolicy": "https-only"
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+            "Compress": true,
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "NateNiteProductionPollsPollPageRewriteFunctionFC220441",
+                    "FunctionARN"
+                  ]
+                }
+              }
+            ],
+            "TargetOriginId": "NateNiteProductionPollsStackNateNiteProductionPollsDistributionOrigin1FBAAE0D0",
+            "ViewerProtocolPolicy": "redirect-to-https"
+          },
+          "DefaultRootObject": "index.html",
+          "Enabled": true,
+          "HttpVersion": "http2",
+          "IPV6Enabled": true,
+          "Origins": [
+            {
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "NateNiteProductionPollsBucket1D2D374E",
+                  "RegionalDomainName"
+                ]
+              },
+              "Id": "NateNiteProductionPollsStackNateNiteProductionPollsDistributionOrigin1FBAAE0D0",
+              "OriginAccessControlId": {
+                "Fn::GetAtt": [
+                  "NateNiteProductionPollsDistributionOrigin1S3OriginAccessControl059FF0D4",
+                  "Id"
+                ]
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              }
+            },
+            {
+              "CustomOriginConfig": {
+                "OriginProtocolPolicy": "https-only",
+                "OriginSSLProtocols": [
+                  "TLSv1.2"
+                ]
+              },
+              "DomainName": {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::GetAtt": [
+                          "NateNiteProductionPollsSubmitFunctionFunctionUrlF7E6ABF3",
+                          "FunctionUrl"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "Id": "NateNiteProductionPollsStackNateNiteProductionPollsDistributionOrigin2A83766B8",
+              "OriginAccessControlId": {
+                "Fn::GetAtt": [
+                  "NateNiteProductionPollsDistributionOrigin2FunctionUrlOriginAccessControlEF6BFBFD",
+                  "Id"
+                ]
+              }
+            }
+          ],
+          "PriceClass": "PriceClass_100",
+          "ViewerCertificate": {
+            "AcmCertificateArn": {
+              "Fn::ImportValue": "NateNiteProductionCertificateStack:ExportsOutputRefNateNiteProductionCertificateCertificate2B0443046970A127"
+            },
+            "MinimumProtocolVersion": "TLSv1.2_2021",
+            "SslSupportMethod": "sni-only"
+          },
+          "WebACLId": {
+            "Fn::ImportValue": "NateNiteProductionSiteStack:ExportsOutputFnGetAttNateNiteProductionSiteWebACLArn4855ADFC"
+          }
+        }
+      }
+    },
+    "NateNiteProductionPollsAliasRecord7219F5D5": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "NateNiteProductionPollsDistribution8F8C8E68",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": {
+            "Fn::FindInMap": [
+              "AWSCloudFrontPartitionHostedZoneIdMap",
+              {
+                "Ref": "AWS::Partition"
+              },
+              "zoneId"
+            ]
+          }
+        },
+        "HostedZoneId": "DUMMY",
+        "Name": "polls.natenite.net.",
+        "Type": "A"
+      }
+    },
+    "NateNiteProductionPollsPageDeploymentAwsCliLayer144FEB86": {
+      "Type": "AWS::Lambda::LayerVersion",
+      "Properties": {
+        "Content": {
+          "S3Bucket": "cdk-hnb659fds-assets-605560722292-us-east-1",
+          "S3Key": "ASSET_HASH.zip"
+        },
+        "Description": "/opt/awscli/aws"
+      }
+    },
+    "NateNiteProductionPollsPageDeploymentCustomResource57C5F711": {
+      "Type": "Custom::CDKBucketDeployment",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C81C01536",
+            "Arn"
+          ]
+        },
+        "SourceBucketNames": [
+          "cdk-hnb659fds-assets-605560722292-us-east-1"
+        ],
+        "SourceObjectKeys": [
+          "ASSET_HASH.zip"
+        ],
+        "DestinationBucketName": {
+          "Ref": "NateNiteProductionPollsBucket1D2D374E"
+        },
+        "WaitForDistributionInvalidation": true,
+        "Prune": true,
+        "Exclude": [
+          "definitions/*"
+        ],
+        "DistributionId": {
+          "Ref": "NateNiteProductionPollsDistribution8F8C8E68"
+        },
+        "DistributionPaths": [
+          "/*"
+        ],
+        "OutputObjectKeys": true
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRoleDefaultPolicy88902FDF": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":s3:::cdk-hnb659fds-assets-605560722292-us-east-1"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":s3:::cdk-hnb659fds-assets-605560722292-us-east-1/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "NateNiteProductionPollsBucket1D2D374E",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "NateNiteProductionPollsBucket1D2D374E",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": [
+                "cloudfront:GetInvalidation",
+                "cloudfront:CreateInvalidation"
+              ],
+              "Effect": "Allow",
+              "Resource": "*"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRoleDefaultPolicy88902FDF",
+        "Roles": [
+          {
+            "Ref": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265"
+          }
+        ]
+      }
+    },
+    "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C81C01536": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Architectures": [
+          "arm64"
+        ],
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-605560722292-us-east-1",
+          "S3Key": "ASSET_HASH.zip"
+        },
+        "Environment": {
+          "Variables": {
+            "AWS_CA_BUNDLE": "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+          }
+        },
+        "Handler": "index.handler",
+        "Layers": [
+          {
+            "Ref": "NateNiteProductionPollsPageDeploymentAwsCliLayer144FEB86"
+          }
+        ],
+        "MemorySize": 1024,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265",
+            "Arn"
+          ]
+        },
+        "Runtime": "python3.13",
+        "Timeout": 900
+      },
+      "DependsOn": [
+        "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRoleDefaultPolicy88902FDF",
+        "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265"
+      ]
+    },
+    "NateNiteProductionPollsDefinitionsDeploymentAwsCliLayerA7EF159F": {
+      "Type": "AWS::Lambda::LayerVersion",
+      "Properties": {
+        "Content": {
+          "S3Bucket": "cdk-hnb659fds-assets-605560722292-us-east-1",
+          "S3Key": "ASSET_HASH.zip"
+        },
+        "Description": "/opt/awscli/aws"
+      }
+    },
+    "NateNiteProductionPollsDefinitionsDeploymentCustomResource5CA6D11E": {
+      "Type": "Custom::CDKBucketDeployment",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C81C01536",
+            "Arn"
+          ]
+        },
+        "SourceBucketNames": [
+          "cdk-hnb659fds-assets-605560722292-us-east-1"
+        ],
+        "SourceObjectKeys": [
+          "ASSET_HASH.zip"
+        ],
+        "DestinationBucketName": {
+          "Ref": "NateNiteProductionPollsBucket1D2D374E"
+        },
+        "DestinationBucketKeyPrefix": "definitions",
+        "WaitForDistributionInvalidation": true,
+        "Prune": true,
+        "DistributionId": {
+          "Ref": "NateNiteProductionPollsDistribution8F8C8E68"
+        },
+        "DistributionPaths": [
+          "/*"
+        ],
+        "OutputObjectKeys": true
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Mappings": {
+    "AWSCloudFrontPartitionHostedZoneIdMap": {
+      "aws": {
+        "zoneId": "Z2FDTNDATAQYW2"
+      },
+      "aws-cn": {
+        "zoneId": "Z3RFFRIM2A3IF5"
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}

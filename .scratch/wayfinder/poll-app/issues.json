@@ -1,0 +1,173 @@
+[
+  {
+    "slice": "01",
+    "title": "01. Confirm the CDK constructs exist in the pinned version",
+    "body": "**Type:** AFK  \n**Slice:** 01\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nLocal synth and docs checks, no AWS resources. The research read `aws-cdk-lib` 2.273.0 docs but the repo pins 2.260.0, and several decisions depend on specific constructs. Find out now what exists, before building on it.\n\n## Acceptance criteria\n\n- [ ] The pinned version is checked for each of these, and the exact API names are recorded as a comment on this issue: the Function URL origin with origin access control; asset directories that follow symlinks; the log-delivery resources (destination, source, delivery) and the property that selects JSON output; Glue table, Athena workgroup and named query constructs; saved Logs Insights query definitions; the Lambda runtime constant to use.\n- [ ] A throwaway synth confirms that asset content hashes appear in the template for a Lambda code asset and a bucket deployment.\n- [ ] Node is confirmed available for `make unit-test`, and its version is noted for CI.\n- [ ] Any missing construct has a written workaround; if a library bump is needed it is proposed as its own change through `make update_cdk_libs`.\n- [ ] No AWS resources are created and nothing is deployed.\n\n## Blocked by\n\n- None - can start immediately\n\n## User stories addressed\n\nSpec user stories: Enabling work only: 66, 67, 70, 71\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": []
+  },
+  {
+    "slice": "02",
+    "title": "02. A poll page is live at polls.natenite.net/poll1",
+    "body": "**Type:** HITL  \n**Slice:** 02\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nThin end-to-end path for a visitor to open a poll and see its form. Adds `PollsSetting` and its per-environment JSON, a first `PollsStack` (private S3 bucket with OAC, deployment of the shared page and the poll definitions, a CloudFront distribution at the polls hostname reusing the existing certificate and attaching the existing web ACL, the viewer-request rewrite function, and the Route 53 alias), inventory wiring after the Site stack, the make targets that preview and deploy the polls stack, and the golden-test helper that ignores asset hashes. The page renders a poll's title and single-choice questions from its definition; submitting comes in slice 03.\n\nHuman gate: the first production deploy, and checking the page in a browser.\n\n## Acceptance criteria\n\n- [ ] A typed `PollsSetting` loads from `config/production`, with unit tests following the existing settings tests.\n- [ ] `PollsStack` is created from `PollsInput` for production and deploys after the Site stack; `cdk ls` shows `NateNiteProductionPollsStack`.\n- [ ] Referencing the Site stack's web ACL adds an export to the Site stack; the regenerated Site golden file differs only by that addition.\n- [ ] A golden test for the polls stack passes, and editing a poll definition or the page does not change the golden file (asset hashes are normalized by a shared test helper).\n- [ ] A make target previews the polls stack diff, and another runs the unit tests and then deploys it.\n- [ ] `make static` passes.\n- [ ] After deploy: `https://polls.natenite.net/poll1` shows the poll and its single-choice questions; an unknown poll ID shows a 'poll not found' message; the apex and `www` sites still load.\n- [ ] The page works on a phone-sized viewport.\n\n## Blocked by\n\n- Blocked by slice 01\n\n## User stories addressed\n\nSpec user stories: 1, 2, 14, 20-25, 32, 33, 65-68, 70, 71\n",
+    "labels": [
+      "ready-for-human"
+    ],
+    "blocked_by_slices": [
+      "01"
+    ]
+  },
+  {
+    "slice": "03",
+    "title": "03. A single-choice poll accepts and stores a response",
+    "body": "**Type:** HITL  \n**Slice:** 03\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nThe first complete write path. A Python submit function validates a single-choice submission against the poll definition (bundled from the same directory that feeds the site) and writes a response record. Adds the on-demand DynamoDB table (retained, deletion protection, point-in-time recovery off), the Function URL with IAM auth reached through the distribution's submit behavior using OAC, the shared limits constants, the page's submit with the body hash header and thank-you message, and an owner script that dumps one poll's responses. Node tests join the existing test gate and CI gets a Node setup step.\n\nHuman gate: deploy and verify the signed POST path on the real distribution.\n\n## Acceptance criteria\n\n- [ ] Entry-point tests with an in-memory fake table: a valid submission returns a created response and writes exactly one response record holding answers by question ID, submitted-at time and poll version; response IDs sort by submission time.\n- [ ] Tests: an unknown option or a missing required answer is rejected with a machine-readable reason; an unknown poll returns not found; a body over 6 KB returns payload-too-large.\n- [ ] Page logic tests (Node built-in runner) cover the body hash with a known SHA-256 vector and the request body builder.\n- [ ] CI's static-check runs the Node tests with a pinned Node setup.\n- [ ] Template assertions: the Function URL uses IAM auth, the table is retained with deletion protection, and the golden files are updated and read.\n- [ ] An owner script dumps one poll's responses to JSON or CSV using a single query.\n- [ ] After deploy: submitting through the page stores a record and shows a thank-you; a POST without the hash header fails; the raw function address is rejected; the table has the expected keys.\n\n## Blocked by\n\n- Blocked by slice 02\n\n## User stories addressed\n\nSpec user stories: 3, 12, 22, 34-37, 44-47, 64, 69, 72-74\n",
+    "labels": [
+      "ready-for-human"
+    ],
+    "blocked_by_slices": [
+      "02"
+    ]
+  },
+  {
+    "slice": "04",
+    "title": "04. Multiple-choice and rating questions",
+    "body": "**Type:** AFK  \n**Slice:** 04\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nExtend validation and the page to multiple-choice (list of option IDs) and rating (integer within the question's bounds), using the fixed answer shapes from the spec.\n\n## Acceptance criteria\n\n- [ ] Entry-point tests for each type: valid answers store in the fixed shape; unknown options, duplicate options, out-of-range or non-integer ratings are rejected with a reason.\n- [ ] The page renders both types and shows a clear message for a missed or invalid answer before submitting.\n- [ ] The poll definition checks (slice 07 once merged) and the example poll cover both types.\n- [ ] `make static` passes.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 4, 5, 11, 26\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "05",
+    "title": "05. Free-text answers with length and body-size limits",
+    "body": "**Type:** AFK  \n**Slice:** 05\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nAdd free-text questions capped at 500 characters, with a live remaining-characters count, and make the oversize-body rejection give respondents a clear message instead of a generic block.\n\n## Acceptance criteria\n\n- [ ] Entry-point tests: an answer over 500 characters is rejected with a reason; a body over 6 KB is rejected with payload-too-large before the shared ACL's 8 KB limit applies.\n- [ ] The page shows a remaining-characters count and a clear message when a limit is hit.\n- [ ] Limits come from the shared constants, not duplicated values.\n- [ ] `make static` passes.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 6, 7, 62, 63\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "06",
+    "title": "06. Optional email stored as a separate record, with the privacy notice",
+    "body": "**Type:** AFK  \n**Slice:** 06\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nAdd the optional email field. When given, store it as its own record linked to the response by response ID; when omitted, store nothing. The email is never written to logs. The page shows a one-line notice that the address is kept until removal is requested (final legal wording is out of scope). Extend the owner script with 'purge emails older than N days' and 'delete by email address'.\n\n## Acceptance criteria\n\n- [ ] Entry-point tests: no email means no email record; a valid email creates an email record with the same response ID as the response; an invalid or over-254-character email is rejected with a reason.\n- [ ] A test confirms no log output from the handler contains an email address.\n- [ ] The page shows the optional email field and the one-line notice; skipping it works.\n- [ ] The owner script purges emails older than a given age and deletes by address, with tests against the fake table.\n- [ ] `make static` passes.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 8, 9, 10, 40, 41, 42, 43, 53\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "07",
+    "title": "07. Poll closing time and a test that validates every poll file",
+    "body": "**Type:** AFK  \n**Slice:** 07\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nEnforce an optional closing time (UTC) on the server and show a 'poll closed' message in the page. Add a unit test that loads every real poll definition file and fails a bad one, including checking that the worst-case submission size stays within the limit.\n\n## Acceptance criteria\n\n- [ ] Entry-point tests with a fixed clock: a submission before the closing time is accepted; after it is rejected with a distinct reason; a poll without a closing time never closes. The status code chosen for a closed poll is documented in the tests.\n- [ ] The page shows a 'poll closed' message.\n- [ ] A test runs every file in the poll definitions directory and checks valid question types, unique IDs, a valid closing time, rating bounds, an integer version, and that the worst-case body (up to 4 bytes per character for every free-text cap, plus email and overhead) is under the 6 KB limit.\n- [ ] A deliberately bad poll file makes the test fail (shown in the PR), and the test runs in the normal unit-test gate.\n- [ ] The version number is stored on every response.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 15, 27, 28, 29, 30, 31\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "08",
+    "title": "08. Soft duplicate handling with a browser token",
+    "body": "**Type:** AFK  \n**Slice:** 08\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nThe page generates a random browser token on first visit, remembers a prior submission and says so, and sends the token. The server stores it hashed on each response and never rejects repeats.\n\n## Acceptance criteria\n\n- [ ] Page tests (or manual check recorded in the PR): after submitting, reopening the poll in the same browser says it was already answered.\n- [ ] Entry-point tests: the token is stored hashed (never raw) on the response; two submissions with the same token are both accepted.\n- [ ] `make static` passes.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 13, 38, 39\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "09",
+    "title": "09. Retry with backoff and the friendly 'busy' message",
+    "body": "**Type:** AFK  \n**Slice:** 09\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nOn throttled (429) and server-error responses the page retries two or three times with backoff, keeps the answers in the form, then shows a 'busy, try again in a minute' message with a one-click resubmit. Validation errors are not retried.\n\n## Acceptance criteria\n\n- [ ] Node tests cover the retry decision and backoff timing: 429 and 5xx retry, 4xx validation errors do not, and the number of attempts is bounded.\n- [ ] The page keeps the form filled in after a failure and offers one-click resubmit.\n- [ ] The message is shown for 429, WAF blocks and 5xx alike.\n- [ ] `make static` passes.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 16, 17, 18, 19, 61\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "10",
+    "title": "10. Rate rule on the shared ACL and Lambda concurrency cap of 2",
+    "body": "**Type:** HITL  \n**Slice:** 10\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nAdd the per-IP rate-based rule to the existing shared web ACL (counts only POST to the submit path on the polls hostname, 20 per 5 minutes, action block) and set the function's reserved concurrency from settings. This edits the live main-site ACL.\n\nHuman gate: review the Site diff in isolation, deploy, and run the throttling checks.\n\n## Acceptance criteria\n\n- [ ] The Site golden file changes only by the new rate rule, and template assertions confirm its scope (host, path, method), limit, window and action.\n- [ ] The function's reserved concurrency is read from the polls settings and asserted in the template.\n- [ ] After deploy: more than 20 submit POSTs from one IP in 5 minutes are blocked; page views are not counted; driving concurrency above the cap returns HTTP 429.\n- [ ] While testing, record which of Url4xxCount, Throttles and ConcurrentExecutions moved for a throttled request, and add the answer to the spec's further notes.\n- [ ] The main site (apex and www) is unaffected.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 58, 59, 60, 61, 65\n",
+    "labels": [
+      "ready-for-human"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "11",
+    "title": "11. Handler event logging, 365-day retention and saved Logs Insights queries",
+    "body": "**Type:** AFK  \n**Slice:** 11\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nThe function writes one structured JSON log line per request outcome (accepted, rejected with a reason, error) with no email or answer text. Its log group retains entries for 365 days, and the stack defines saved Logs Insights queries for the routine check. No alarms or notifications.\n\n## Acceptance criteria\n\n- [ ] Entry-point tests assert one structured log line per outcome and that no email address or answer text appears in any line.\n- [ ] Template assertions: the log group retains 365 days; saved Logs Insights queries exist; no alarm or notification topic exists.\n- [ ] The golden file is updated and read.\n- [ ] `make static` passes.\n\n## Blocked by\n\n- Blocked by slice 03\n\n## User stories addressed\n\nSpec user stories: 52, 53, 54, 55, 56\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "03"
+    ]
+  },
+  {
+    "slice": "12",
+    "title": "12. CloudFront access logs delivered to S3 (JSON, 365-day expiry)",
+    "body": "**Superseded:** the CloudFront access-log layer was removed by the simplify-polls effort; problems are now checked with `make -s check-polls`.\n\n**Type:** HITL  \n**Slice:** 12\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nConfigure CloudFront standard logging (v2) for the polls distribution to a new private S3 bucket in JSON, with a 365-day expiration rule and the bucket policy log delivery needs, using the log-delivery resources confirmed in slice 01.\n\nHuman gate: deploy and confirm logs actually arrive.\n\n## Acceptance criteria\n\n- [ ] Template assertions: delivery source, destination (S3, JSON) and delivery exist; the bucket is private with a 365-day expiration rule and a delivery policy.\n- [ ] The golden file is updated and read.\n- [ ] After deploy: log files appear in the bucket (allow several hours; delivery can lag up to 24 hours) and are JSON.\n- [ ] Record whether a WAF-blocked request appears as a 403 with result type Error, and add the answer to the spec's further notes.\n\n## Blocked by\n\n- Blocked by slice 02\n\n## User stories addressed\n\nSpec user stories: 48, 49\n",
+    "labels": [
+      "ready-for-human"
+    ],
+    "blocked_by_slices": [
+      "02"
+    ]
+  },
+  {
+    "slice": "13",
+    "title": "13. Athena table, workgroup and saved queries over the CloudFront logs",
+    "body": "**Superseded:** the CloudFront access-log layer was removed by the simplify-polls effort; problems are now checked with `make -s check-polls`.\n\n**Type:** AFK  \n**Slice:** 13\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nDefine the Glue database and table (partition projection per the AWS-documented JSON definition), an Athena workgroup with a results location that expires after about 30 days, and saved queries for errors by day, top client IPs, and 403 and 429 responses.\n\n## Acceptance criteria\n\n- [ ] Template assertions cover the table, workgroup, results expiration rule and the saved queries; the golden file is updated and read.\n- [ ] After deploy and once logs exist: each saved query runs successfully against real delivered logs, and the results are recorded in the PR.\n- [ ] `make static` passes.\n\n## Blocked by\n\n- Blocked by slice 12\n\n## User stories addressed\n\nSpec user stories: 50, 51, 57\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "12"
+    ]
+  },
+  {
+    "slice": "14",
+    "title": "14. Docs: how to add a poll",
+    "body": "**Type:** AFK  \n**Slice:** 14\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nDocument the routine for adding a poll and where the decisions live.\n\n## Acceptance criteria\n\n- [ ] The README explains how to add a poll: write the definition file, run the unit tests, preview, deploy, and check the live page.\n- [ ] It links to ADR 0001, the glossary and the spec, and states the poll definition format.\n- [ ] It notes the owner scripts and the saved queries for the periodic check.\n\n## Blocked by\n\n- Blocked by slice 07\n\n## User stories addressed\n\nSpec user stories: 75, 76, 77\n",
+    "labels": [
+      "ready-for-agent"
+    ],
+    "blocked_by_slices": [
+      "07"
+    ]
+  },
+  {
+    "slice": "15",
+    "title": "15. Launch verification: smoke tests, open inferences, privacy wording, real polls",
+    "body": "**Type:** HITL  \n**Slice:** 15\n\n## Parent PRD\n\n`.scratch/wayfinder/poll-app/spec.md` (decision map: `map.md`; ordered plan: `build-plan.md`; compute decision: ADR 0001)\n\n## What to build\n\nThe final gate before announcing a poll. Run the end-to-end smoke tests from the build plan, answer the open questions from the research, and settle the launch checklist items that were deliberately left out of the architecture.\n\n## Acceptance criteria\n\n- [ ] All smoke tests from the build plan's first-deploy section have a recorded result.\n- [ ] These open questions are answered in the spec's further notes: whether managed rules block ordinary free text; whether a throttled request moves the 4xx or throttle metric; the status code used for a closed poll.\n- [ ] The privacy notice wording is final, and a decision is recorded on whether any privacy regime applies to collecting an email.\n- [ ] Real poll questions are in place, and the example poll is either kept or removed on purpose.\n- [ ] The main site is confirmed unaffected.\n\n## Blocked by\n\n- Blocked by slice 04, 05, 06, 07, 08, 09, 10, 11, 13\n\n## User stories addressed\n\nSpec user stories: Verifies the stories above; closes the open inferences\n",
+    "labels": [
+      "ready-for-human"
+    ],
+    "blocked_by_slices": [
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10",
+      "11",
+      "13"
+    ]
+  }
+]

@@ -104,3 +104,27 @@ class AppVpcSetting(JsonSettingBase):
 
     cidr: str
     max_azs: int = 2
+
+
+@dataclass(frozen=True, kw_only=True)
+class PollsSetting(JsonSettingBase):
+    """Settings for the Polls stack template.
+
+    Commonly customized fields:
+    - subdomain of the default fqdn that serves the polls site
+    - rate limit: submissions per window per address before blocking
+    - reserved concurrency: optional cap on the submit function
+    """
+
+    RELATIVE_PATH_TEMPLATE: ClassVar[str] = "polls/polls.json"
+
+    subdomain: str  # ex. "polls" serves polls.<default_fqdn>
+    rate_limit: int  # ex. 20 submissions per address per window
+    rate_window_seconds: int  # ex. 300 (WAF allows 60, 120, 300 or 600)
+    # Lambda lets you reserve at most (account concurrency quota - 100), so a
+    # new account with a quota of 10 cannot reserve any: leave this unset.
+    reserved_concurrency: int | None = None
+
+    def fqdn(self, default_fqdn: str) -> str:
+        """Return the polls host name under the environment's default fqdn."""
+        return f"{self.subdomain}.{default_fqdn}"
