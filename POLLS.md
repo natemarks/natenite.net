@@ -89,7 +89,7 @@ against the new definition.
 ### Remove a response
 
 There is no make target. Delete the one item by key (take the `pk` and `sk`
-from `make dump-poll`, and double check them):
+from the file `make dump-poll` writes, and double check them):
 
 ```console
 aws dynamodb delete-item --region us-east-1 \
@@ -114,16 +114,21 @@ Site stack and stays until it is removed in `stack/site.py` and redeployed.
 ### Responses
 
 ```console
-make -s dump-poll poll=<poll-id> > responses.json
+make dump-poll poll=<poll-id>            # answers, and whether each visitor left an email
+make dump-poll poll=<poll-id> emails=1   # ...and the email addresses too
 ```
 
-The output is a JSON array, one object per response, in submission order, with
-sorted keys (so the same data gives the same text):
+Either writes `.polls-results/<poll-id>.json` (git-ignored, readable by you only,
+replaced on each run) and prints only a one-line summary. The file is a JSON
+array, one object per response, in submission order, with sorted keys (so the
+same data gives the same text):
 
 ```json
 {
   "answers": {"dates": ["sat-nov-7", "sun-nov-8"]},
   "browserTokenHash": "9f2c...",
+  "email": "reader@example.com",
+  "hasEmail": true,
   "pk": "POLL#nov20267s-in-603",
   "pollVersion": 1,
   "sk": "RESPONSE#20261016T140322418302Z-9f2c1a7e44b0d3a1",
@@ -139,17 +144,29 @@ sorted keys (so the same data gives the same text):
 - `browserTokenHash` hashes a random token the visitor's browser keeps; it is
   how the page tells a visitor they already answered. Responses with the same
   hash came from one browser (repeats are not blocked, so decide how to count
-  them); none means the browser sent no token. Email addresses are not here.
+  them); none means the browser sent no token.
+- `hasEmail` says whether the visitor left an address. `email` (only with
+  `emails=1`) is the address or `null`. With it the file ties each answer to a
+  person: keep it out of shared places. If a response was deleted on its own,
+  its email record is left behind; the command counts those on stderr (never
+  printing an address) and `make delete-email` removes them.
 
-Counting with `jq`, for a poll whose question `id` is `dates`:
+Counting with `jq`, for a poll whose question `id` is `dates` (the recipes
+need no addresses):
 
 ```console
+F=.polls-results/<poll-id>.json
+
 # votes per option, every response counted
-jq '[.[].answers.dates[]] | group_by(.) | map({date: .[0], votes: length})' responses.json
+jq '[.[].answers.dates[]] | group_by(.) | map({date: .[0], votes: length})' $F
 
 # the same, counting each browser's latest response once
 jq 'group_by(.browserTokenHash // .sk) | map(last)
-    | [.[].answers.dates[]] | group_by(.) | map({date: .[0], votes: length})' responses.json
+    | [.[].answers.dates[]] | group_by(.) | map({date: .[0], votes: length})' $F
+
+# how many responders left an email, and their share (a measure of engagement)
+jq '(map(select(.hasEmail)) | length) as $n
+    | {responders: length, left_an_email: $n, share: (if length > 0 then $n / length else null end)}' $F
 ```
 
 For a `single` question use `.answers.<id>` without `[]`; for `rating`, group
@@ -157,8 +174,9 @@ the numbers the same way.
 
 ### Email addresses
 
-Email addresses are separate records, linked to a response by the same ID,
-and never printed by the scripts. To read them:
+Email addresses are separate records, linked to a response by the same ID.
+`make dump-poll poll=<poll-id> emails=1` joins them into the results file; to
+read the records themselves:
 
 ```console
 aws dynamodb query --region us-east-1 \

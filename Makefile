@@ -230,12 +230,12 @@ cdk-bootstrap: node_modules .venv ## bootstrap the default account and region fo
     )
 
 
-dump-poll: .venv ## print one poll's responses as JSON (make dump-poll poll=<poll-id>)
+dump-poll: .venv ## write one poll's responses to .polls-results/<poll-id>.json; emails=1 adds the email addresses (make dump-poll poll=<poll-id> emails=1)
 	( \
        source scripts/enable_pyenv.sh; \
        pyenv local $(PYTHON_VERSION); \
        source .venv/bin/activate; \
-       PYTHONPATH="." python3 scripts/dump_poll.py $(poll) --app-env $(app_env); \
+       PYTHONPATH="." python3 scripts/dump_poll.py $(poll) --app-env $(app_env) $(if $(emails),--emails,); \
     )
 
 purge-emails: .venv ## report emails older than N days; add yes=1 to delete them (make purge-emails days=365)

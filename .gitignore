@@ -63,3 +63,7 @@ response.json
 edit/
 # Output of the polls log check (make check-polls)
 .polls-check/
+
+# Poll results written by make dump-poll (answers, optionally email addresses)
+.polls-results/
+responses.json
