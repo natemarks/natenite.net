@@ -18,8 +18,8 @@ Deploy the simplified stack and verify it. Before deploying: confirm the respons
 - [x] The diff review shows no replacement of the responses table or the site bucket. The only replacement is the log group (its fixed name forces a new group; the old generated-name group is retained with its earlier lines), and that is recorded. **Done 2026-10-20** (the owner ran `make diff-polls`; see the comment below).
 - [ ] After deploy the poll page loads, a test submission is accepted (single choice and at least one other question type), the response ID has the new shape, and the log line has exactly the trimmed fields.
 - [ ] Closed-poll, retry-and-busy and already-answered behaviour are unchanged for a respondent.
-- [ ] `make check-polls` against production returns a summary that includes the test submission and daily metrics.
-- [ ] The log fetch is checked against the real log group: the real `aws logs filter-log-events` output has the shape the jq program expects (`events[].timestamp` and `events[].message`, pages merged), and the test submission's line appears in `.polls-check/handler.jsonl` with its timestamp.
+- [x] `make check-polls` against production returns a summary that includes the test submission and daily metrics. **Done 2026-10-20:** `make -s check-polls` exits 0 with `logs` (1 request, accepted, 0 errors), 11 metric series and `incomplete_metrics` empty.
+- [x] The log fetch is checked against the real log group: the real `aws logs filter-log-events` output has the shape the jq program expects (`events[].timestamp` and `events[].message`, pages merged), and the test submission's line appears in `.polls-check/handler.jsonl` with its timestamp. **Done 2026-10-20:** the new log group holds five real events for the test submission (`INIT_START`, `START`, one JSON line, `END`, `REPORT`); events have `timestamp` and `message` as the program expects; the fetch kept only the JSON line, with its timestamp.
 - [x] `make dump-poll` and the email commands (dry-run) still work. **Done 2026-10-20:** `dump-poll` returns `[]` (the table is empty); `purge-emails` and `delete-email` dry runs report 0 records.
 - [x] The access-log bucket the removal leaves behind is dealt with (the stack was deployed on 2026-10-16 and has it: logical ID `NateNiteProductionPollsAccessLogBucket9851091C`, bucket `nateniteproductionpollsst-nateniteproductionpollsa-qenbhgeewyyz`, retained on delete): if it holds log files with client IP addresses you do not want, empty and delete it, otherwise record that it was kept on purpose. **Done 2026-10-20:** the owner emptied and deleted it (a `head-bucket` now returns 404).
 - [x] The main site (apex and www) is unaffected. **Done 2026-10-20:** `https://natenite.net/` and `https://www.natenite.net/` both return 200 with the same 7,392-byte page.
@@ -157,4 +157,33 @@ answer, the new response ID shape and trimmed log fields on a real line, the
 test submission appearing in `make -s check-polls`, the live log-line shape
 against the new (still empty) log group, and the closed-poll, retry-and-busy
 and already-answered browser behaviour.
+
+**2026-10-20, the owner's test submission (checked read-only).**
+- Page and submit: accepted, HTTP 201 in the log, for the live poll
+  `nov20267s-in-603` (answers `sat-nov-7` and `sun-nov-15`), with an email
+  address given.
+- Stored: `RESPONSE#20261020T103723107676Z-f8faa28a1d4177e6` (the new ID shape:
+  UTC time to the microsecond, `Z-`, 16 hex digits), `pollVersion` 1, a browser
+  token hash present, and one linked `EMAIL#20261020T103723107676Z-f8faa28a1d4177e6`
+  record with the same suffix. The log line's `responseId` is the same ID.
+- Log line, exactly: `level`, `outcome`, `status`, `pollId`, `responseId`,
+  `bodyBytes` (155), `requestId`, plus `timestamp` added by the fetch. No
+  email, answer text, token or CloudFront request ID.
+- Metrics: the function's invocation for that UTC day showed in CloudWatch a
+  couple of minutes after the submission (the first `check-polls` run was just
+  too early, so reporting lag, not a fault).
+- **The first criterion stays open on purpose:** it asks for a test submission
+  to a single-choice question and at least one other type, but the only live
+  poll has one multi-choice question. The page, the new ID and the log fields
+  are confirmed; single-choice storage is covered by the unit tests and not
+  exercised live. Say if that is enough to tick it, or publish a poll with a
+  single-choice question to test it.
+- **Test data to remove** (the owner's call; it is the only data in the table):
+  the response, with
+  `aws dynamodb delete-item --region us-east-1 --table-name natenite-production-polls-responses --key '{"pk":{"S":"POLL#nov20267s-in-603"},"sk":{"S":"RESPONSE#20261020T103723107676Z-f8faa28a1d4177e6"}}'`,
+  and the email record with `make purge-emails days=0 yes=1` (deletes every
+  email record; there is exactly one) or `make delete-email email=<address> yes=1`.
+
+**Left in slice 13:** the first criterion above, and the closed-poll,
+retry-and-busy and already-answered behaviour in a browser.
 
