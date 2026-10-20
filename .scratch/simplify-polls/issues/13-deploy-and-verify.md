@@ -20,9 +20,9 @@ Deploy the simplified stack and verify it. Before deploying: confirm the respons
 - [ ] Closed-poll, retry-and-busy and already-answered behaviour are unchanged for a respondent.
 - [ ] `make check-polls` against production returns a summary that includes the test submission and daily metrics.
 - [ ] The log fetch is checked against the real log group: the real `aws logs filter-log-events` output has the shape the jq program expects (`events[].timestamp` and `events[].message`, pages merged), and the test submission's line appears in `.polls-check/handler.jsonl` with its timestamp.
-- [ ] `make dump-poll` and the email commands (dry-run) still work.
-- [ ] The access-log bucket the removal leaves behind is dealt with (the stack was deployed on 2026-10-16 and has it: logical ID `NateNiteProductionPollsAccessLogBucket9851091C`, bucket `nateniteproductionpollsst-nateniteproductionpollsa-qenbhgeewyyz`, retained on delete): if it holds log files with client IP addresses you do not want, empty and delete it, otherwise record that it was kept on purpose.
-- [ ] The main site (apex and www) is unaffected.
+- [x] `make dump-poll` and the email commands (dry-run) still work. **Done 2026-10-20:** `dump-poll` returns `[]` (the table is empty); `purge-emails` and `delete-email` dry runs report 0 records.
+- [x] The access-log bucket the removal leaves behind is dealt with (the stack was deployed on 2026-10-16 and has it: logical ID `NateNiteProductionPollsAccessLogBucket9851091C`, bucket `nateniteproductionpollsst-nateniteproductionpollsa-qenbhgeewyyz`, retained on delete): if it holds log files with client IP addresses you do not want, empty and delete it, otherwise record that it was kept on purpose. **Done 2026-10-20:** the owner emptied and deleted it (a `head-bucket` now returns 404).
+- [x] The main site (apex and www) is unaffected. **Done 2026-10-20:** `https://natenite.net/` and `https://www.natenite.net/` both return 200 with the same 7,392-byte page.
 
 ## Blocked by
 
@@ -75,3 +75,86 @@ I could not confirm the failure in advance, only that it is likely.
   auto-delete helper functions) have no retention set.
 
 Still open in this slice: the deploy itself and every check that follows it.
+
+**2026-10-20, after the owner's deploy (output pasted by the owner; the agent
+then checked the state read-only).**
+
+- **Result:** `UPDATE_COMPLETE`, "Update successful. One or more resources could
+  not be deleted." Deployment took 405 s. Certificate and Site stacks: no
+  changes. CDK printed "Some resources failed to delete but were skipped".
+- **The one failure:** `NateNiteProductionPollsAccessLogQueriesWorkGroup8934E74A`
+  (`AWS::Athena::WorkGroup`, `NateNiteProductionPolls-access-logs`),
+  `DELETE_FAILED` three times with "WorkGroup ... is not empty" (HTTP 400). As
+  predicted in the diff review: the workgroup holds 6 query executions and the
+  old definition never set the recursive-delete option. CloudFormation did
+  delete its 3 named queries first (0 remain). Per the CloudFormation docs the
+  resource was then dropped from the stack, so the stack itself is healthy and
+  needs no further action.
+- **Everything else in the removal went through:** the Glue database and table
+  (`EntityNotFoundException`), the log delivery source, destination and delivery
+  (none left), the saved Logs Insights queries (none left). The function now
+  logs to `/natenite/production/polls/submit` and has the new code.
+- **The agent tried to delete the leftover workgroup** with
+  `aws athena delete-work-group --recursive-delete-option`; the permission
+  classifier denied the command and it was not retried or worked around. It is
+  left for the owner (command in the cleanup list below).
+- **Verified read-only after the deploy:** a full `make -s check-polls` against
+  production exits 0 and prints one document with `logs`, `metrics` and
+  `incomplete_metrics`; 11 metric series, none incomplete; the log half reports
+  0 requests because the new log group is empty (0 bytes) until the function is
+  next invoked.
+
+**Cleanup list (what is left in the account):**
+1. Athena workgroup `NateNiteProductionPolls-access-logs` (the failure): delete
+   with `aws athena delete-work-group --region us-east-1 --work-group NateNiteProductionPolls-access-logs --recursive-delete-option`.
+   Removes only its query history; result files are in the retained bucket.
+2. Access-log bucket `nateniteproductionpollsst-nateniteproductionpollsa-qenbhgeewyyz`
+   (retained by design): 19 objects, about 24 KB, CloudFront logs with client
+   IP addresses. It no longer belongs to any stack. Delete it or keep it on
+   purpose; its own 365-day expiry rule still applies to the objects.
+3. Old log group `NateNiteProductionPollsStack-NateNiteProductionPollsSubmitLogGroup5C4BB9CB-Re8cWuoUj1Kl`
+   (retained by design): about 59 KB of earlier function log lines, 365-day
+   retention, no longer written to. It expires on its own; delete only for
+   tidiness.
+
+Still open: the checks that need a real submission (the new response ID shape,
+the trimmed log fields, the test submission appearing in `check-polls`), the
+live-log-shape check against the new group, the main site check, and the three
+cleanup decisions above.
+
+**2026-10-20, a one-off target for cleanup item 2 (uncommitted, in the
+`Makefile`):** `make delete-orphaned-bucket bucket=<name> [yes=1]`. Dry run by
+default. It refuses unless the name matches the pattern CloudFormation
+generated for this bucket (derived from the stack's own name and the log
+bucket's logical ID, not typed in), no stack owns the bucket (a lookup by
+physical ID must fail), and the bucket was never versioned; then it empties and
+deletes it. Tested without `yes=1`: no argument, an unrelated name and the live
+site bucket are refused; a right-pattern name that does not exist fails
+cleanly; the real bucket's dry run lists 19 objects and 24,102 bytes and leaves
+it untouched. The delete path itself has not been run. **Remove the target
+after use** (its help text says so). A tag check was planned and dropped: the
+bucket carries only the project's shared tags, which prove nothing.
+
+**2026-10-20, cleanup done.** The owner deleted the leftover Athena workgroup
+(`list-work-groups` now shows only `primary`) and, with the one-off Make target,
+emptied and deleted the orphaned access-log bucket (404 on `head-bucket`). The
+stack is `UPDATE_COMPLETE`. The one-off target has been removed from the
+`Makefile`, which is identical to the last commit again; it was an inline
+recipe, so there was no module to remove. The old log group is kept on purpose
+(about 59 KB, expires on its own after 365 days); the target was never meant
+for it.
+
+**2026-10-20, more read-only checks.** The polls page `/nov20267s-in-603` and
+its definition file `/definitions/nov20267s-in-603.json` return 200. An unknown
+address such as `/nope` also returns 200 with the same shared page (1,635
+bytes), by design: the rewrite function serves the page for any address without
+a file extension, and the page itself shows "poll not found" after it fails to
+load a definition. So a 200 does not mean the poll exists; only a browser (or
+fetching `/definitions/<id>.json`) tells you that.
+
+**Left in slice 13, all needing a real submission:** the page accepting a test
+answer, the new response ID shape and trimmed log fields on a real line, the
+test submission appearing in `make -s check-polls`, the live log-line shape
+against the new (still empty) log group, and the closed-poll, retry-and-busy
+and already-answered browser behaviour.
+
