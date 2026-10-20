@@ -124,3 +124,7 @@ class PollsSetting(JsonSettingBase):
     # Lambda lets you reserve at most (account concurrency quota - 100), so a
     # new account with a quota of 10 cannot reserve any: leave this unset.
     reserved_concurrency: int | None = None
+
+    def fqdn(self, default_fqdn: str) -> str:
+        """Return the polls host name under the environment's default fqdn."""
+        return f"{self.subdomain}.{default_fqdn}"

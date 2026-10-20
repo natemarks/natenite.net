@@ -46,9 +46,7 @@ class SiteInput:
 
     def polls_fqdn(self) -> str:
         """Return the polls host name the shared ACL rate limits."""
-        return (
-            f"{self.polls_setting.subdomain}.{self.env_setting.default_fqdn}"
-        )
+        return self.polls_setting.fqdn(self.env_setting.default_fqdn)
 
     def prefix(self) -> str:
         """Return the stack/resource prefix for this environment."""

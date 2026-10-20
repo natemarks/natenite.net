@@ -136,26 +136,9 @@ pipeline before CDK commands to always use the latest discovered data.
 
 ## Polls
 
-Simple public polls served at `polls.natenite.net/<poll-id>`. A respondent
-answers a poll's questions and may leave an email address; only the owner
-reads the data.
-
-**[POLLS.md](./POLLS.md) is the owner's guide.** It covers how to add, change
-and close polls and the poll definition format, how to read results and
-manage email addresses, how to monitor the logs for problems, and a reference
-of the make targets:
-
-```console
-make deploy-polls                 # run the tests, then deploy
-make -s dump-poll poll=<poll-id>  # a poll's responses as JSON
-make -s query-logs                # recent errors, blocks and busy addresses
-```
-
-Terms are defined in [CONTEXT.md](./CONTEXT.md), the reasons for the hosting
-choice are in
-[ADR 0001](./docs/adr/0001-lambda-function-url-with-cloudfront-oac.md), and
-the full requirements are in the
-[spec](./.scratch/wayfinder/poll-app/spec.md).
+Simple public polls at `polls.natenite.net/<poll-id>`, run from
+**[POLLS.md](./POLLS.md)**, the owner's guide to adding and closing polls,
+reading results and checking for problems.
 
 ## Contributing
 

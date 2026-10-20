@@ -49,7 +49,7 @@ def problems_for(change, name="demo"):
 @pytest.mark.unit
 def test_a_well_formed_definition_has_no_problems():
     """Every question type, a closing time, nothing wrong."""
-    assert definitions.validate(copy.deepcopy(VALID), "demo") == []
+    assert not definitions.validate(copy.deepcopy(VALID), "demo")
 
 
 def assert_problem(change, fragment, name="demo"):
@@ -127,7 +127,7 @@ def test_a_closing_time_must_be_a_utc_timestamp(closes_at):
 @pytest.mark.unit
 def test_a_closing_time_is_optional():
     """A poll without `closesAt` is fine."""
-    assert problems_for(drop("closesAt")) == []
+    assert not problems_for(drop("closesAt"))
 
 
 def question(index):
@@ -293,57 +293,7 @@ def test_reasonable_rating_bounds_are_accepted(bounds):
     def change(d):
         d["questions"][2].update(min=bounds[0], max=bounds[1])
 
-    assert problems_for(change) == []
-
-
-@pytest.mark.unit
-def test_worst_case_body_is_the_longest_submission_the_poll_allows():
-    """Longest option, every multi option, widest rating, 500 emoji of text."""
-    # Built by hand, not with json.dumps, so it is independent of the code.
-    expected = (
-        '{"pollId":"demo","answers":{"q1":"a","q2":["x","y"],"q3":5,'
-        '"q4":"' + "\U0001f600" * 500 + '"}}'
-    )
-
-    assert definitions.worst_case_body_bytes(VALID) == len(
-        expected.encode("utf-8")
-    )
-
-
-def with_text_questions(count):
-    """A change that makes the poll have `count` free-text questions."""
-
-    def change(d):
-        d["questions"] = [
-            {"id": f"t{n}", "type": "text", "prompt": "Tell us more"}
-            for n in range(count)
-        ]
-
-    return change
-
-
-@pytest.mark.unit
-def test_two_long_free_text_questions_fit_the_size_budget():
-    """Two 500-character answers plus the reserved room are within 6 KB."""
-    assert problems_for(with_text_questions(2)) == []
-
-
-@pytest.mark.unit
-def test_three_long_free_text_questions_exceed_the_size_budget():
-    """Three 500-character answers could not be submitted in the worst case."""
-    assert_problem(with_text_questions(3), "body")
-
-
-@pytest.mark.unit
-def test_a_choice_question_with_very_many_options_exceeds_the_budget():
-    """Selecting every option of a huge multiple-choice question is too big."""
-
-    def change(d):
-        d["questions"][1]["options"] = [
-            {"id": f"option-number-{n:04d}", "label": "L"} for n in range(400)
-        ]
-
-    assert_problem(change, "body")
+    assert not problems_for(change)
 
 
 # The published polls and the examples kept for the README
@@ -369,6 +319,6 @@ def test_every_poll_definition_in_the_repository_is_valid(path):
 
     problems = definitions.validate(definition, path.stem)
 
-    assert problems == [], f"{path.name} has problems:\n- " + "\n- ".join(
+    assert not problems, f"{path.name} has problems:\n- " + "\n- ".join(
         problems
     )

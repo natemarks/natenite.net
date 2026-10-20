@@ -26,8 +26,6 @@ from botocore.exceptions import ClientError
 import limits
 from definitions import parse_closes_at
 
-_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-
 # `polls` is a symlink to the repository's poll definitions; CDK follows it
 # when it builds the function bundle, so the deployed folder holds real files.
 BUNDLED_DEFINITIONS_DIR = Path(__file__).parent / "polls"
@@ -50,19 +48,13 @@ def load_definitions(directory):
     return definitions
 
 
-def _encode(number, length):
-    """Encode a number as `length` Crockford base32 characters."""
-    chars = []
-    for _ in range(length):
-        number, digit = divmod(number, 32)
-        chars.append(_CROCKFORD[digit])
-    return "".join(reversed(chars))
-
-
 def _new_response_id(when):
-    """Return a time-sortable ID: 48-bit millisecond time, 80 random bits."""
-    milliseconds = int(when.timestamp() * 1000)
-    return _encode(milliseconds, 10) + _encode(secrets.randbits(80), 16)
+    """Return a time-sortable ID: the UTC time, then 64 random bits as hex.
+
+    For example `20261016T120000123456Z-9f2c1a7e44b0d3a1`.
+    """
+    utc = when.astimezone(timezone.utc)
+    return f"{utc:%Y%m%dT%H%M%S%f}Z-{secrets.token_hex(8)}"
 
 
 def _response(status, payload):
@@ -224,14 +216,11 @@ def _validated(event, definitions, submitted, facts):
     _check_answers(definition, request["answers"])
     token_hash = _token_hash_from(request)
     email = _email_from(request)
-    facts["hasBrowserToken"] = token_hash is not None
-    facts["hasEmail"] = email is not None
     return definition, request["answers"], email, token_hash
 
 
 def _log(event, response, facts):
     """Print one JSON line describing the outcome: never any content."""
-    headers = event.get("headers") or {}
     status = response["statusCode"]
     if status < 400:
         level, outcome = "INFO", "accepted"
@@ -241,17 +230,12 @@ def _log(event, response, facts):
         level, outcome = "ERROR", "error"
     line = {
         "level": level,
-        "event": "submission",
         "outcome": outcome,
         "status": status,
         "pollId": facts["pollId"],
         "responseId": facts["responseId"],
-        "hasEmail": facts["hasEmail"],
-        "hasBrowserToken": facts["hasBrowserToken"],
         "bodyBytes": len((event.get("body") or "").encode("utf-8")),
-        "at": facts["at"],
         "requestId": facts["requestId"],
-        "cloudfrontRequestId": headers.get("x-amz-cf-id"),
     }
     if status >= 400:
         line["reason"] = json.loads(response["body"]).get("reason")
@@ -315,9 +299,6 @@ def handle(  # pylint: disable=too-many-arguments
     facts = {
         "pollId": None,
         "responseId": None,
-        "hasEmail": False,
-        "hasBrowserToken": False,
-        "at": submitted.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "requestId": request_id,
         "failure": None,
     }

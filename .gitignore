@@ -61,3 +61,5 @@ response.json
 
 # use edit/ to store data files for manual edits
 edit/
+# Output of the polls log check (make check-polls)
+.polls-check/

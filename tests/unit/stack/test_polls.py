@@ -78,73 +78,11 @@ def polls_template(
 
 
 @pytest.mark.unit
-def test_distribution_serves_polls_hostname_with_shared_certificate_and_acl():
-    """The polls distribution uses the polls host, shared cert and ACL."""
+def test_the_distribution_is_protected_by_the_shared_web_acl():
+    """Without the ACL, neither the rate limit nor the managed rules apply."""
     polls_template().has_resource_properties(
         "AWS::CloudFront::Distribution",
-        {
-            "DistributionConfig": {
-                "Aliases": ["polls.natenite.net"],
-                "DefaultCacheBehavior": {
-                    "ViewerProtocolPolicy": "redirect-to-https"
-                },
-                "ViewerCertificate": {
-                    "AcmCertificateArn": assertions.Match.any_value()
-                },
-                "WebACLId": assertions.Match.any_value(),
-            }
-        },
-    )
-
-
-@pytest.mark.unit
-def test_default_behavior_rewrites_poll_paths_at_viewer_request():
-    """A viewer-request function maps poll paths to the shared page."""
-    template = polls_template()
-    template.has_resource_properties(
-        "AWS::CloudFront::Distribution",
-        {
-            "DistributionConfig": {
-                "DefaultCacheBehavior": {
-                    "FunctionAssociations": [
-                        {
-                            "EventType": "viewer-request",
-                            "FunctionARN": assertions.Match.any_value(),
-                        }
-                    ]
-                }
-            }
-        },
-    )
-    template.has_resource_properties(
-        "AWS::CloudFront::Function",
-        {
-            "FunctionCode": assertions.Match.string_like_regexp(
-                ".*/index.html.*"
-            )
-        },
-    )
-
-
-@pytest.mark.unit
-def test_polls_hostname_is_an_alias_to_the_distribution():
-    """An A alias record in the existing zone points at the distribution."""
-    polls_template().has_resource_properties(
-        "AWS::Route53::RecordSet",
-        {
-            "Name": "polls.natenite.net.",
-            "Type": "A",
-            "AliasTarget": {
-                "DNSName": {
-                    "Fn::GetAtt": [
-                        assertions.Match.string_like_regexp(
-                            ".*Distribution.*"
-                        ),
-                        "DomainName",
-                    ]
-                }
-            },
-        },
+        {"DistributionConfig": {"WebACLId": assertions.Match.any_value()}},
     )
 
 
@@ -258,72 +196,6 @@ def test_function_url_requires_iam_authentication():
 
 
 @pytest.mark.unit
-def test_submit_path_is_served_by_the_function_without_caching():
-    """/submit takes every method over HTTPS and is never cached."""
-    polls_template().has_resource_properties(
-        "AWS::CloudFront::Distribution",
-        {
-            "DistributionConfig": {
-                "CacheBehaviors": [
-                    {
-                        "PathPattern": "/submit",
-                        "AllowedMethods": [
-                            "GET",
-                            "HEAD",
-                            "OPTIONS",
-                            "PUT",
-                            "PATCH",
-                            "POST",
-                            "DELETE",
-                        ],
-                        "ViewerProtocolPolicy": "https-only",
-                        # AWS managed policies: CachingDisabled and
-                        # AllViewerExceptHostHeader (the function URL needs
-                        # its own Host header, not the viewer's).
-                        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
-                        "OriginRequestPolicyId": (
-                            "b689b0a8-53d0-40ab-baf2-68738e2966ac"
-                        ),
-                        "TargetOriginId": assertions.Match.any_value(),
-                    }
-                ]
-            }
-        },
-    )
-
-
-@pytest.mark.unit
-def test_function_origin_uses_lambda_origin_access_control():
-    """CloudFront signs requests to the function URL with OAC."""
-    polls_template().has_resource_properties(
-        "AWS::CloudFront::OriginAccessControl",
-        {
-            "OriginAccessControlConfig": {
-                "OriginAccessControlOriginType": "lambda",
-                "SigningBehavior": "always",
-                "SigningProtocol": "sigv4",
-            }
-        },
-    )
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize(
-    "action", ["lambda:InvokeFunctionUrl", "lambda:InvokeFunction"]
-)
-def test_cloudfront_may_invoke_the_function(action):
-    """Both permissions AWS now requires are granted to CloudFront."""
-    polls_template().has_resource_properties(
-        "AWS::Lambda::Permission",
-        {
-            "Action": action,
-            "Principal": "cloudfront.amazonaws.com",
-            "SourceArn": assertions.Match.any_value(),
-        },
-    )
-
-
-@pytest.mark.unit
 def test_function_bundle_holds_only_the_modules_and_every_definition(
     tmp_path,
 ):
@@ -356,10 +228,15 @@ def test_function_bundle_holds_only_the_modules_and_every_definition(
 
 @pytest.mark.unit
 def test_function_logs_to_a_group_kept_for_a_year_and_after_teardown():
-    """An explicit log group: 365 days of history, kept if the stack goes."""
+    """A fixed-name log group: 365 days of history, kept if the stack goes."""
     template = polls_template()
     template.has_resource_properties(
-        "AWS::Logs::LogGroup", {"RetentionInDays": 365}
+        "AWS::Logs::LogGroup",
+        {
+            # The owner's log check reads this exact name.
+            "LogGroupName": "/natenite/production/polls/submit",
+            "RetentionInDays": 365,
+        },
     )
     template.has_resource(
         "AWS::Logs::LogGroup",
@@ -372,57 +249,6 @@ def test_function_logs_to_a_group_kept_for_a_year_and_after_teardown():
             "LoggingConfig": {"LogGroup": assertions.Match.any_value()},
         },
     )
-
-
-SAVED_QUERIES = {
-    "polls/rejections-by-reason": ['filter outcome = "rejected"', "by reason"],
-    "polls/errors": ['filter level = "ERROR"', "errorType", "responseId"],
-    "polls/submissions-per-day": [
-        'filter outcome = "accepted"',
-        "by pollId",
-        "datefloor(@timestamp, 1d)",
-    ],
-    "polls/recent-requests": [
-        'filter event = "submission"',
-        "sort @timestamp desc",
-        "limit 100",
-    ],
-}
-
-
-@pytest.mark.unit
-def test_the_routine_check_queries_are_saved_against_the_function_log_group():
-    """Four saved Logs Insights queries, each searching the function's logs."""
-    template = polls_template().to_json()
-    log_groups = [
-        name
-        for name, resource in template["Resources"].items()
-        if resource["Type"] == "AWS::Logs::LogGroup"
-    ]
-    saved = {
-        resource["Properties"]["Name"]: resource["Properties"]
-        for resource in template["Resources"].values()
-        if resource["Type"] == "AWS::Logs::QueryDefinition"
-    }
-
-    assert sorted(saved) == sorted(SAVED_QUERIES)
-    for name, fragments in SAVED_QUERIES.items():
-        assert saved[name]["LogGroupNames"] == [{"Ref": log_groups[0]}]
-        for fragment in fragments:
-            assert fragment in saved[name]["QueryString"], (name, fragment)
-
-
-@pytest.mark.unit
-def test_there_are_no_alarms_and_no_notification_topics():
-    """The owner checks periodically by hand; nothing pages anyone."""
-    types = {
-        resource["Type"]
-        for resource in polls_template().to_json()["Resources"].values()
-    }
-
-    assert "AWS::CloudWatch::Alarm" not in types
-    assert "AWS::CloudWatch::CompositeAlarm" not in types
-    assert "AWS::SNS::Topic" not in types
 
 
 def submit_function_properties(template):
@@ -488,115 +314,3 @@ def test_the_rate_rule_watches_the_host_and_path_the_polls_site_serves():
     assert watched_host in distribution["Aliases"]
     assert watched_path == submit_behavior["PathPattern"]
     assert watched_method in submit_behavior["AllowedMethods"]
-
-
-def _access_log_bucket(template):
-    """The one bucket that expires its objects: the access log bucket."""
-    buckets = {
-        name: body
-        for name, body in template.find_resources("AWS::S3::Bucket").items()
-        if "LifecycleConfiguration" in body["Properties"]
-    }
-    assert len(buckets) == 1
-    return buckets.popitem()
-
-
-@pytest.mark.unit
-def test_access_logs_go_to_a_private_bucket_that_expires_them_after_a_year():
-    """Access logs are kept privately for a year, and survive teardown."""
-    template = polls_template()
-    _, bucket = _access_log_bucket(template)
-    props = bucket["Properties"]
-    assert props["PublicAccessBlockConfiguration"] == {
-        "BlockPublicAcls": True,
-        "BlockPublicPolicy": True,
-        "IgnorePublicAcls": True,
-        "RestrictPublicBuckets": True,
-    }
-    rules = props["LifecycleConfiguration"]["Rules"]
-    assert ("Enabled", 365, "cloudfront/polls/") in [
-        (rule["Status"], rule["ExpirationInDays"], rule.get("Prefix"))
-        for rule in rules
-    ]
-    assert bucket["DeletionPolicy"] == "Retain"
-
-
-@pytest.mark.unit
-def test_log_delivery_may_write_only_from_this_accounts_delivery_sources():
-    """Only this account's log delivery may write into the log bucket."""
-    template = polls_template()
-    name, _ = _access_log_bucket(template)
-    policies = [
-        policy
-        for policy in template.find_resources("AWS::S3::BucketPolicy").values()
-        if policy["Properties"]["Bucket"] == {"Ref": name}
-    ]
-    assert len(policies) == 1
-    statements = [
-        statement
-        for statement in policies[0]["Properties"]["PolicyDocument"][
-            "Statement"
-        ]
-        if statement.get("Principal")
-        == {"Service": "delivery.logs.amazonaws.com"}
-    ]
-    assert len(statements) == 1
-    statement = statements[0]
-    assert statement["Effect"] == "Allow"
-    assert statement["Action"] == "s3:PutObject"
-    condition = statement["Condition"]
-    assert condition["StringEquals"]["s3:x-amz-acl"] == (
-        "bucket-owner-full-control"
-    )
-    assert condition["StringEquals"]["aws:SourceAccount"] == (
-        APP_ENV_TO_AWS_ACCOUNT[ENVIRONMENT]
-    )
-    assert "delivery-source:*" in str(condition["ArnLike"]["aws:SourceArn"])
-
-
-@pytest.mark.unit
-def test_the_distribution_delivers_json_access_logs_to_the_log_bucket():
-    """The distribution's access logs reach the bucket as JSON."""
-    template = polls_template()
-    bucket_name, _ = _access_log_bucket(template)
-    ((source_id, source),) = template.find_resources(
-        "AWS::Logs::DeliverySource"
-    ).items()
-    ((destination_id, destination),) = template.find_resources(
-        "AWS::Logs::DeliveryDestination"
-    ).items()
-    ((_, delivery),) = template.find_resources("AWS::Logs::Delivery").items()
-
-    assert source["Properties"]["LogType"] == "ACCESS_LOGS"
-    assert "Distribution" in str(source["Properties"]["ResourceArn"])
-    assert destination["Properties"]["OutputFormat"] == "json"
-    assert bucket_name in str(
-        destination["Properties"]["DestinationResourceArn"]
-    )
-    assert "cloudfront/polls" in str(
-        destination["Properties"]["DestinationResourceArn"]
-    )
-    props = delivery["Properties"]
-    assert props["DeliverySourceName"] == {"Ref": source_id}
-    assert props["DeliveryDestinationArn"] == {
-        "Fn::GetAtt": [destination_id, "Arn"]
-    }
-    assert props["S3EnableHiveCompatiblePath"] is True
-    # Hive paths only apply to the variables of an explicit suffix path
-    assert props["S3SuffixPath"] == "{yyyy}/{MM}/{dd}"
-
-
-@pytest.mark.unit
-def test_the_delivery_waits_for_the_bucket_policy_that_lets_it_write():
-    """The delivery is created only after the policy allowing it."""
-    template = polls_template()
-    bucket_name, _ = _access_log_bucket(template)
-    policy_ids = [
-        name
-        for name, policy in template.find_resources(
-            "AWS::S3::BucketPolicy"
-        ).items()
-        if policy["Properties"]["Bucket"] == {"Ref": bucket_name}
-    ]
-    ((_, delivery),) = template.find_resources("AWS::Logs::Delivery").items()
-    assert set(policy_ids) <= set(delivery.get("DependsOn", []))

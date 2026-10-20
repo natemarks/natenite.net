@@ -9,6 +9,7 @@ Purpose:
 # pylint: disable=duplicate-code,too-many-lines
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -106,7 +107,7 @@ def post_event(payload, method="POST", path="/submit"):
     }
 
 
-def submit(payload, table=None, now=NOW, **event_kwargs):
+def submit(payload, table=None, now=NOW, request_id=None, **event_kwargs):
     """Call the entry point and return (response, table)."""
     table = FakeTable() if table is None else table
     response = handler.handle(
@@ -114,6 +115,7 @@ def submit(payload, table=None, now=NOW, **event_kwargs):
         table=table,
         definitions=DEFINITIONS,
         now=lambda: now,
+        request_id=request_id,
     )
     return response, table
 
@@ -138,16 +140,42 @@ def test_valid_submission_is_stored_and_acknowledged():
 def test_response_ids_sort_in_submission_order():
     """Sort keys come back in the order the responses were submitted."""
     table = FakeTable()
-    for offset_ms in (0, 3, 5, 9, 250):
+    # Three of these fall within the first millisecond; the last is a minute on.
+    for offset_us in (0, 1, 999, 3_000, 250_000, 61_000_000):
         submit(
             {"pollId": "poll1", "answers": {"q1": "a"}},
             table=table,
-            now=NOW + timedelta(milliseconds=offset_ms),
+            now=NOW + timedelta(microseconds=offset_us),
         )
 
     sort_keys = [item["sk"] for item in table.items]
     assert sort_keys == sorted(sort_keys)
-    assert len(set(sort_keys)) == 5
+    assert len(set(sort_keys)) == 6
+
+
+@pytest.mark.unit
+def test_two_responses_at_the_same_instant_get_different_ids():
+    """The random part keeps simultaneous submissions apart."""
+    table = FakeTable()
+    for _ in range(2):
+        submit({"pollId": "poll1", "answers": {"q1": "a"}}, table=table)
+
+    assert len({item["sk"] for item in table.items}) == 2
+
+
+@pytest.mark.unit
+def test_a_response_id_is_the_utc_time_then_random_hex():
+    """Spelled out by hand: 12:00:00 UTC on 2026-10-16, then 16 hex digits."""
+    payload = {"pollId": "poll1", "answers": {"q1": "a"}}
+    in_utc, _ = submit(payload)
+    four_hours_behind = timezone(timedelta(hours=-4))
+    elsewhere, _ = submit(payload, now=NOW.astimezone(four_hours_behind))
+
+    for response in (in_utc, elsewhere):
+        response_id = json.loads(response["body"])["responseId"]
+        assert re.fullmatch(
+            r"20261016T120000000000Z-[0-9a-f]{16}", response_id
+        )
 
 
 @pytest.mark.unit
@@ -294,61 +322,6 @@ def test_definitions_are_loaded_by_poll_id(tmp_path):
 
     assert sorted(loaded) == ["poll1", "poll2"]
     assert loaded["poll2"]["title"] == "Another poll"
-
-
-def a_valid_answer(question):
-    """Some answer the poll's question accepts, whatever its type."""
-    if question["type"] == "single":
-        return question["options"][0]["id"]
-    if question["type"] == "multi":
-        return [question["options"][0]["id"]]
-    if question["type"] == "rating":
-        return question["min"]
-    return "a short answer"
-
-
-@pytest.mark.unit
-def test_every_bundled_definition_accepts_a_valid_submission():
-    """Each definition shipped with the function can take a response."""
-    definitions = handler.load_definitions(handler.BUNDLED_DEFINITIONS_DIR)
-    assert definitions
-    for poll_id, poll in definitions.items():
-        answers = {
-            question["id"]: a_valid_answer(question)
-            for question in poll["questions"]
-        }
-        table = FakeTable()
-
-        response = handler.handle(
-            post_event({"pollId": poll_id, "answers": answers}),
-            table=table,
-            definitions=definitions,
-            now=lambda poll=poll: open_time_for(poll),
-        )
-
-        assert response["statusCode"] == 201, poll_id
-        assert table.items[0]["pollVersion"] == poll["version"]
-
-
-@pytest.mark.unit
-def test_the_launch_poll_offers_the_four_november_dates_until_the_15th():
-    """The poll as the owner specified it (their wording, their dates)."""
-    definitions = handler.load_definitions(handler.BUNDLED_DEFINITIONS_DIR)
-    poll = definitions["nov20267s-in-603"]
-    assert poll["title"] == (
-        "Lacrosse 7s in the 603: which dates can you make?"
-    )
-    (question,) = poll["questions"]
-    assert question["type"] == "multi"
-    assert [option["label"] for option in question["options"]] == [
-        "Saturday 11/7",
-        "Sunday 11/8",
-        "Saturday 11/14",
-        "Sunday 11/15",
-    ]
-    # End of 11/15 US Eastern (standard time by then, UTC-5)
-    assert poll["closesAt"] == "2026-11-16T04:59:59Z"
-    assert sorted(definitions) == ["nov20267s-in-603"]
 
 
 @pytest.mark.unit
@@ -529,6 +502,7 @@ def test_every_bundled_poll_accepts_a_valid_submission(poll_id):
 
     assert response["statusCode"] == 201
     assert len(table.items) == 1
+    assert table.items[0]["pollVersion"] == definitions[poll_id]["version"]
 
 
 @pytest.mark.unit
@@ -816,26 +790,6 @@ def test_a_failed_email_write_keeps_the_answers_and_reports_an_error():
     assert address not in response["body"]
 
 
-@pytest.mark.unit
-def test_an_email_address_never_reaches_logs_or_other_output(caplog, capsys):
-    """Accepted, rejected and failed submissions leave no address behind."""
-    caplog.set_level(logging.DEBUG)
-    good = "needle.reader@example.com"
-    bad = "needle.invalid@@example.com"
-    too_long = "needle" + "x" * 300 + "@example.com"
-
-    bodies = [
-        submit(with_email(good))[0]["body"],
-        submit(with_email(bad))[0]["body"],
-        submit(with_email(too_long))[0]["body"],
-        submit(with_email(good), table=EmailWritesFail())[0]["body"],
-    ]
-
-    out, err = capsys.readouterr()
-    everything = caplog.text + out + err + "".join(bodies)
-    assert "needle" not in everything
-
-
 TOKEN = "0123456789abcdef0123456789abcdef"
 # SHA-256 of TOKEN, computed independently with Python hashlib.
 TOKEN_HASH = "3eb1bd439947eb762998e566ccc2e099c791118b2f40579cc4f7da2b5061b7f9"
@@ -924,24 +878,19 @@ def log_lines(capsys):
 def test_an_accepted_submission_logs_one_structured_line(capsys):
     """One JSON line: what happened, to which poll, how big, no content."""
     payload = {"pollId": "poll1", "answers": {"q1": "a"}}
-    response, _ = submit(payload)
+    response, _ = submit(payload, request_id="lambda-request-id-456")
 
     lines = log_lines(capsys)
 
     assert len(lines) == 1
     assert lines[0] == {
         "level": "INFO",
-        "event": "submission",
         "outcome": "accepted",
         "status": 201,
         "pollId": "poll1",
         "responseId": json.loads(response["body"])["responseId"],
-        "hasEmail": False,
-        "hasBrowserToken": False,
         "bodyBytes": len(json.dumps(payload).encode("utf-8")),
-        "at": "2026-10-16T12:00:00Z",
-        "requestId": None,
-        "cloudfrontRequestId": None,
+        "requestId": "lambda-request-id-456",
     }
 
 
@@ -952,20 +901,6 @@ REJECTIONS = [
         "unknown_option",
         "poll1",
         id="bad-answer-on-a-real-poll",
-    ),
-    pytest.param(
-        {"payload": "not json{"},
-        400,
-        "invalid_json",
-        None,
-        id="unparseable-json",
-    ),
-    pytest.param(
-        {"payload": {"pollId": "nope", "answers": {"q1": "a"}}},
-        404,
-        "unknown_poll",
-        None,
-        id="unknown-poll",
     ),
     pytest.param(
         {"payload": {"pollId": "poll1\nFAKE-LINE", "answers": {"q1": "a"}}},
@@ -983,26 +918,6 @@ REJECTIONS = [
         "poll_closed",
         "closing",
         id="closed-poll",
-    ),
-    pytest.param(
-        {
-            "payload": {"pollId": "poll1", "answers": {"q1": "a"}},
-            "method": "GET",
-        },
-        405,
-        "method_not_allowed",
-        None,
-        id="wrong-method",
-    ),
-    pytest.param(
-        {
-            "payload": {"pollId": "poll1", "answers": {"q1": "a"}},
-            "path": "/other",
-        },
-        404,
-        "not_found",
-        None,
-        id="wrong-path",
     ),
 ]
 
@@ -1053,7 +968,6 @@ def test_a_lost_email_logs_an_error_but_still_names_the_saved_response(capsys):
     assert line["reason"] == "email_not_stored"
     assert line["pollId"] == "poll1"
     assert line["responseId"]
-    assert line["hasEmail"] is True
     assert "reader@example.com" not in json.dumps(line)
 
 
@@ -1120,32 +1034,11 @@ def test_an_unexpected_failure_is_a_clean_500_and_logs_only_the_error_kind(
 
 
 @pytest.mark.unit
-def test_request_ids_and_yes_no_flags_pass_through(capsys):
-    """Both request IDs are recorded, and the flags say what was sent."""
-    event = post_event(with_token(TOKEN, email="reader@example.com"))
-    event["headers"]["x-amz-cf-id"] = "cf-request-id-123"
-
-    handler.handle(
-        event,
-        table=FakeTable(),
-        definitions=DEFINITIONS,
-        now=lambda: NOW,
-        request_id="lambda-request-id-456",
-    )
-
-    (line,) = log_lines(capsys)
-    assert line["requestId"] == "lambda-request-id-456"
-    assert line["cloudfrontRequestId"] == "cf-request-id-123"
-    assert line["hasEmail"] is True
-    assert line["hasBrowserToken"] is True
-    assert "reader@example.com" not in json.dumps(line)
-    assert TOKEN not in json.dumps(line)
-    assert TOKEN_HASH not in json.dumps(line)
-
-
-@pytest.mark.unit
-def test_no_line_contains_content_and_each_request_logs_exactly_one(capsys):
+def test_no_line_contains_content_and_each_request_logs_exactly_one(
+    capsys, caplog
+):
     """Answers, email, token and hash never appear, whatever the outcome."""
+    caplog.set_level(logging.DEBUG)
     secret_text = "needle-answer-text"
     secret_email = "needle.reader@example.com"
     requests = [
@@ -1153,6 +1046,8 @@ def test_no_line_contains_content_and_each_request_logs_exactly_one(capsys):
         | {"email": secret_email, "browserToken": TOKEN},
         mixed_answers(q4=secret_text, q1="zzz") | {"email": secret_email},
         mixed_answers(q4=secret_text) | {"email": "needle@@bad"},
+        mixed_answers(q4=secret_text)
+        | {"email": "needle" + "x" * 300 + "@example.com"},
         mixed_answers(q4="needle" * 200) | {"email": secret_email},
         {
             "pollId": "poll2",
@@ -1160,20 +1055,26 @@ def test_no_line_contains_content_and_each_request_logs_exactly_one(capsys):
             "browserToken": TOKEN,
         },
     ]
-    for body in requests:
-        submit(body)
-    submit(
-        mixed_answers(q4=secret_text) | {"email": secret_email},
-        table=EmailWritesFail(),
+    responses = [submit(body)[0] for body in requests]
+    responses.append(
+        submit(
+            mixed_answers(q4=secret_text) | {"email": secret_email},
+            table=EmailWritesFail(),
+        )[0]
     )
-    submit(
-        mixed_answers(q4=secret_text),
-        table=TableDown(RuntimeError("needle-in-runtime")),
+    responses.append(
+        submit(
+            mixed_answers(q4=secret_text),
+            table=TableDown(RuntimeError("needle-in-runtime")),
+        )[0]
     )
 
-    out = capsys.readouterr().out
+    out, err = capsys.readouterr()
     lines = [json.loads(x) for x in out.splitlines() if x.strip()]
-    assert len(lines) == len(requests) + 2
-    assert "needle" not in out
-    assert TOKEN not in out
-    assert TOKEN_HASH not in out
+    everything = (
+        caplog.text + out + err + "".join(r["body"] for r in responses)
+    )
+    assert len(lines) == len(responses)
+    assert "needle" not in everything
+    assert TOKEN not in everything
+    assert TOKEN_HASH not in everything

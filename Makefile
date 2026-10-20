@@ -254,13 +254,45 @@ delete-email: .venv ## report records for one address; add yes=1 to delete them 
        PYTHONPATH="." python3 scripts/manage_emails.py --app-env $(app_env) delete --email '$(email)' $(if $(yes),--yes,); \
     )
 
-query-logs: .venv ## print the routine access-log queries as JSON, 90 days by default (make query-logs days=30)
+# Names the polls log check needs, read from the stack's own inputs so nothing
+# repeats a formula: log group, region, stack, resource prefix, web ACL metric
+# name, account number (space separated).
+POLLS_NAMES := import sys; from config.settings import get_actual_path; from stack.polls import PollsInput; from stack.site import SiteInput; path = get_actual_path(sys.argv[1]); p = PollsInput.from_config_directory(path); s = SiteInput.from_config_directory(path); print(p.log_group_name(), p.env_setting.default_region, p.stack_name(), p.prefix(), s.prefix() + 'WebACL', p.env_setting.aws_account_number)
+
+fetch-logs: .venv ## download the polls function's log (default 90 days) to .polls-check/handler.jsonl (make fetch-logs days=30)
 	( \
        source scripts/enable_pyenv.sh; \
        pyenv local $(PYTHON_VERSION); \
        source .venv/bin/activate; \
-       PYTHONPATH="." python3 scripts/query_logs.py --app-env $(app_env) $(if $(days),--days $(days),); \
+       set -euo pipefail; \
+       read -r log_group region _ <<< "$$(PYTHONPATH="." python3 -c "$(POLLS_NAMES)" $(app_env))"; \
+       mkdir -p .polls-check; \
+       start=$$(( ($$(date +%s) - $(or $(days),90) * 86400) * 1000 )); \
+       aws logs filter-log-events --region "$$region" --log-group-name "$$log_group" --start-time "$$start" --output json \
+         | jq -c -f scripts/jq/polls_log_lines.jq > .polls-check/handler.jsonl.tmp; \
+       mv .polls-check/handler.jsonl.tmp .polls-check/handler.jsonl; \
     )
+
+fetch-metrics: .venv ## download daily metrics (default 90 days, UTC days) to .polls-check/metrics.json (make fetch-metrics days=30)
+	( \
+       source scripts/enable_pyenv.sh; \
+       pyenv local $(PYTHON_VERSION); \
+       source .venv/bin/activate; \
+       set -euo pipefail; \
+       read -r _ region stack prefix webacl account <<< "$$(PYTHONPATH="." python3 -c "$(POLLS_NAMES)" $(app_env))"; \
+       resources=$$(aws cloudformation describe-stack-resources --region "$$region" --stack-name "$$stack" --output json); \
+       function=$$(jq -r --arg prefix "$${prefix}SubmitFunction" '[.StackResources[] | select(.ResourceType == "AWS::Lambda::Function" and (.LogicalResourceId | startswith($$prefix))) | .PhysicalResourceId] | if length == 1 then .[0] else error("expected one submit function, found \(length)") end' <<< "$$resources"); \
+       distribution=$$(jq -r '[.StackResources[] | select(.ResourceType == "AWS::CloudFront::Distribution") | .PhysicalResourceId] | if length == 1 then .[0] else error("expected one distribution, found \(length)") end' <<< "$$resources"); \
+       queries=$$(jq -n -f scripts/jq/polls_metric_queries.jq --arg function "$$function" --arg distribution "$$distribution" --arg account "$$account" --arg webacl "$$webacl"); \
+       start=$$(date -u -d "$(or $(days),90) days ago" +%Y-%m-%dT00:00:00Z); \
+       end=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+       mkdir -p .polls-check; \
+       aws cloudwatch get-metric-data --region "$$region" --start-time "$$start" --end-time "$$end" --metric-data-queries "$$queries" --output json > .polls-check/metrics.json.tmp; \
+       mv .polls-check/metrics.json.tmp .polls-check/metrics.json; \
+    )
+
+check-polls: fetch-logs fetch-metrics ## fetch the polls log and metrics, then print one JSON summary of problems (make -s check-polls days=30)
+	@jq -n --argjson logs "$$(jq -s -f scripts/jq/polls_log_summary.jq .polls-check/handler.jsonl)" --argjson metrics "$$(jq -s -f scripts/jq/polls_metrics_summary.jq .polls-check/metrics.json)" '{logs: $$logs, metrics: $$metrics.metrics, incomplete_metrics: $$metrics.incomplete}'
 
 discover: .venv ## update environment config data with discovered information
 	( \

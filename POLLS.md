@@ -3,7 +3,7 @@
 Simple public polls at `https://polls.natenite.net/<poll-id>`. A visitor
 answers a poll's questions and may leave an email address. Only the owner can
 read the data. This page is the owner's guide: how to manage polls, read their
-results, and watch for problems.
+results, and watch for problems. `make help` lists every command.
 
 Background and decisions:
 
@@ -36,9 +36,9 @@ aws sso login --profile mp-mgmt
 export AWS_PROFILE=mp-mgmt
 ```
 
-Every command below that talks to AWS needs the login and the `AWS_PROFILE`
-export (`make` runs them in this shell). The account is NateNite Production,
-region `us-east-1`. The commands default to `app_env=production`.
+Commands that talk to AWS need the login and the `AWS_PROFILE` export. The
+account is NateNite Production, region `us-east-1`; commands default to
+`app_env=production`. The problem check and counting recipes also need `jq`.
 
 ## Managing polls
 
@@ -47,51 +47,29 @@ region `us-east-1`. The commands default to `app_env=production`.
 1. **Write the definition** as `polls/<poll-id>.json`. The file name must
    match the `id`. `docs/examples/all-question-types.json` shows every question
    type (it is not published; only `polls/` is).
-2. **Run the unit tests:** `make unit-test`. They check every file in
-   `polls/`, so a mistake (a duplicate option, a rating range that is too
-   wide, a poll too big to submit) fails here, before anything is deployed.
-3. **Preview:** `make diff-polls`. Adding a poll should change only the poll
-   files (the definitions upload and the function bundle).
+2. **Run the unit tests:** `make unit-test`. They check the structure of every
+   file in `polls/`, so a mistake (a duplicate option, a rating range that is
+   too wide, a bad closing time) fails here, before anything is deployed, with
+   a message that names the file and the rule.
+3. **Preview:** `make diff-polls` shows what a deploy would change.
 4. **Deploy:** `make deploy-polls`. It runs the unit tests first, then
    deploys the polls stack and anything it depends on. The page deployment
    also clears CloudFront's cache.
-5. **Check the live page:** open `https://polls.natenite.net/<poll-id>`.
-   If you submit to test it, that response is real data (see
-   [Remove a response](#remove-a-response)).
+5. **Check the live page:** open `https://polls.natenite.net/<poll-id>` and
+   submit a test answer. That response is real data (see
+   [Remove a response](#remove-a-response)). If the submission fails, run
+   `make -s check-polls`: a `payload_too_large` rejection means the poll is too
+   big to submit, so shorten it. Nothing checks this before the deploy.
 
 ### Definition format
 
-```json
-{
-  "id": "poll-id",
-  "title": "Shown at the top of the page",
-  "version": 1,
-  "closesAt": "2026-12-31T23:59:59Z",
-  "questions": [ ... ]
-}
-```
-
-| Field | Rule |
-| --- | --- |
-| `id` | Lower-case letters, digits and hyphens; equals the file name. It is the address: `polls.natenite.net/<id>`. |
-| `title` | Non-empty text. |
-| `version` | Whole number, at least 1. Each stored response records the version it answered. |
-| `closesAt` | Optional, UTC, exactly as above. After it the page says the poll is closed and the function refuses submissions (HTTP 410). |
-| `questions` | A non-empty list. Each has a `prompt`, a `type`, and an `id` that starts with a lower-case letter and uses letters, digits and underscores. |
-
-Question types:
-
-| `type` | Extra fields | Stored answer |
-| --- | --- | --- |
-| `single` | `options`: at least two, each with an `id` and a `label` | one option `id` |
-| `multi` | `options`, as above | a list of option `id`s |
-| `rating` | whole-number `min` and `max`, at most 10 steps apart | a whole number in range |
-| `text` | none | the text, up to 500 characters |
-
-The email field appears on every poll and is optional. A submission body may
-not exceed 6 KB, so a poll can hold at most two free-text questions; the unit
-tests check this for you.
-
+A poll is one JSON file with an `id` (the address: lower-case letters, digits
+and hyphens), a `title`, a whole-number `version`, an optional `closesAt` (UTC,
+like `2026-12-31T23:59:59Z`) and a list of `questions`. Each question has an
+`id`, a `prompt` and a `type`: `single` or `multi` (with `options`, each an
+`id` and a `label`), `rating` (a whole number from `min` to `max`) or `text`.
+Every poll also offers an optional email field. Size limits are in
+`lambda/submit/limits.py`; the unit tests' messages state every other rule.
 A working example is `polls/nov20267s-in-603.json`.
 
 ### Change a poll that is open
@@ -107,27 +85,28 @@ against the new definition.
   poll and the function refuses submissions (`unknown_poll`, 404). **The
   stored responses stay in the table**; read them first if you still need
   them.
-- **Remove a response:** there is no make target. Delete the one item by key
-  (take the `pk` and `sk` from `make dump-poll`, and double check them):
 
-  ```console
-  aws dynamodb delete-item --region us-east-1 \
-    --table-name natenite-production-polls-responses \
-    --key '{"pk":{"S":"POLL#<poll-id>"},"sk":{"S":"RESPONSE#<id>"}}'
-  ```
+### Remove a response
+
+There is no make target. Delete the one item by key (take the `pk` and `sk`
+from `make dump-poll`, and double check them):
+
+```console
+aws dynamodb delete-item --region us-east-1 \
+  --table-name natenite-production-polls-responses \
+  --key '{"pk":{"S":"POLL#<poll-id>"},"sk":{"S":"RESPONSE#<id>"}}'
+```
 
 ### Check everything before a deploy
 
-- `make static`: formatters, linters and all unit tests (use while working).
-- `make static-check`: the read-only gate the CI runs.
-- `make unit-update_golden`: only when an infrastructure change is
-  intentional; read the golden-file diff before accepting it.
-- `make cdk-ls`, `make cdk-diff-all`: the same checks for every stack.
+`make static` formats, lints and tests (use it while working); `make
+static-check` is the read-only gate the CI runs. Run `make unit-update_golden`
+only when an infrastructure change is intentional, and read the diff first.
 
 ### Roll back
 
 `cdk destroy NateNiteProductionPollsStack` removes the polls stack. The
-responses table and the log groups are kept. The rate-limit rule lives in the
+responses table and the log group are kept. The rate-limit rule lives in the
 Site stack and stays until it is removed in `stack/site.py` and redeployed.
 
 ## Reading results
@@ -147,22 +126,22 @@ sorted keys (so the same data gives the same text):
   "browserTokenHash": "9f2c...",
   "pk": "POLL#nov20267s-in-603",
   "pollVersion": 1,
-  "sk": "RESPONSE#01K...",
-  "submittedAt": "2026-10-20T14:03:22Z"
+  "sk": "RESPONSE#20261016T140322418302Z-9f2c1a7e44b0d3a1",
+  "submittedAt": "2026-10-16T14:03:22Z"
 }
 ```
 
-- Answers are keyed by question `id`, in the shapes in the table above.
-- `sk` is a time-sortable response ID. `pollVersion` is the definition version
-  the visitor saw.
-- `browserTokenHash` is a hash of a random token the visitor's browser keeps.
-  It is how the page tells a visitor they already answered. Two responses
-  with the same hash came from the same browser; the table does not block a
-  repeat, so decide how to count them. Responses with no hash came from a
-  browser that did not send a token.
-- Email addresses are not in this output.
+- Answers are keyed by question `id`: an option `id` for `single`, a list of
+  them for `multi`, a number for `rating`, the text for `text`.
+- `sk` holds the response ID: the UTC time to the microsecond, then random
+  hex, so responses sort by submission time. `pollVersion` is the definition
+  version the visitor saw.
+- `browserTokenHash` hashes a random token the visitor's browser keeps; it is
+  how the page tells a visitor they already answered. Responses with the same
+  hash came from one browser (repeats are not blocked, so decide how to count
+  them); none means the browser sent no token. Email addresses are not here.
 
-Counting with `jq` (if installed), for a poll whose question `id` is `dates`:
+Counting with `jq`, for a poll whose question `id` is `dates`:
 
 ```console
 # votes per option, every response counted
@@ -178,8 +157,8 @@ the numbers the same way.
 
 ### Email addresses
 
-Email addresses are stored as separate records, linked to a response by the
-same ID, and are never printed by the scripts. To read them:
+Email addresses are separate records, linked to a response by the same ID,
+and never printed by the scripts. To read them:
 
 ```console
 aws dynamodb query --region us-east-1 \
@@ -188,13 +167,12 @@ aws dynamodb query --region us-east-1 \
   --expression-attribute-values '{":pk":{"S":"POLL#<poll-id>"},":p":{"S":"EMAIL#"}}'
 ```
 
-Each record has `email`, `submittedAt`, and an `sk` of `EMAIL#<id>` where
-`<id>` matches the response's ID. The address is used only to coordinate and
-promote lacrosse events, and is kept until its removal is requested (the
-notice on the form says so).
+Each record has `email`, `submittedAt`, and an `sk` of `EMAIL#<id>` matching
+the response's ID. The address is used only to coordinate and promote lacrosse
+events, and is kept until its removal is requested (the form's notice says so).
 
-Managing addresses (both commands only report what they would do until you add
-`yes=1`; they list record keys and dates, never the addresses):
+Managing addresses (these only report what they would do until you add
+`yes=1`, and list record keys and dates, never the addresses):
 
 ```console
 make purge-emails days=365            # addresses older than a year
@@ -205,105 +183,76 @@ make delete-email email=a@b.co yes=1  # ...and delete them
 
 Deleting an email record leaves the response itself in place.
 
-## Monitoring for problems
+## Checking for problems
 
-Nothing here is automatic. There are no alarms or notifications; the design
-chose a periodic check by the owner. A good routine is to run both checks
-below once a week while a poll is open, and once a day around a launch.
-
-### 1. CloudFront access logs (what visitors and the firewall did)
+Nothing is automatic: there are no alarms. Run the check weekly while a poll is
+open, and daily around a launch.
 
 ```console
-make -s query-logs > logs.json        # the last 90 days
-make -s query-logs days=7 > logs.json # a shorter window
+make -s check-polls            # the last 90 days
+make -s check-polls days=7     # a shorter window
 ```
 
-The output is one JSON document with `days`, `from`, `to` and a `queries` map,
-each query a list of rows (every value is text):
+It downloads the function's log and a few daily metrics into `.polls-check/`
+(git-ignored) and prints one JSON document. It only reads from AWS, and needs
+the login above, `jq` and GNU `date`. Read it in this order:
 
-| Query | What it answers |
-| --- | --- |
-| `polls/errors-by-day` | Requests with a status of 400 or more, by day, status and result type. |
-| `polls/top-client-addresses` | The 20 busiest addresses, with how many requests were blocked (403) or rejected (4xx or 5xx). |
-| `polls/blocked-and-throttled` | The latest 100 requests that returned 403 or 429. |
+1. **`logs.errors`**: every request that failed on our side, newest first,
+   with its `timestamp`. **Look here first.** `errorType` and `errorCode` say
+   what failed (for example a DynamoDB error).
+2. **`logs.rejections_by_reason`**: why submissions were turned away, most
+   frequent first. `logs.requests` and `logs.outcomes` give the totals.
+3. **`metrics`**: one entry per series with its value for each UTC day that
+   has data (a day that is missing had none, which for these counts means
+   zero), the peak day (`max`, `max_day`), and for counts a `total`:
+   - `shared firewall blocked requests, rule ...`: blocks by rule on the web
+     ACL the main site shares, so they include its traffic.
+   - `polls firewall blocked requests`: blocks on the polls site alone. A jump
+     is worth a look: a rule may be turning away real visitors (the firewall
+     console's sampled requests show what was blocked).
+   - `function invocations`, `errors`, `throttles`: the submit function.
+   - `distribution requests` and its 4xx and 5xx error percentages (the 4xx
+     percentage includes the function's rejections).
+4. **`incomplete_metrics`**: series CloudWatch did not return in full. Do not
+   trust a quiet result for those.
 
-How to read them:
+`make fetch-logs` and `make fetch-metrics` refresh one half. The raw files stay
+in `.polls-check/` to search with `jq`, for example:
 
-- **403 on `POST /submit`** is the firewall's rate limit (20 posts per 5
-  minutes per address, an estimate rather than an exact count) or its managed
-  rules. A few from one address is normal; many from many addresses is
-  worth a look.
-- **429** means the function was throttled. This shows up only in the access
-  logs, never in the function's own log.
-- **400** is the function refusing an answer (see the reasons below).
-- The result type reads `Error` for all of these, so tell them apart by status.
-- The command fails (exit 1, reason on stderr) if a query fails or takes
-  longer than two minutes, and prints no partial report. An empty list is a
-  real answer: nothing matched.
-- The report includes client IP addresses from your own logs. Do not paste it
-  anywhere public.
-- The same three queries are saved in the Athena workgroup
-  `NateNiteProductionPolls-access-logs` (database
-  `nateniteproductionpolls_access_logs`, table `cloudfront_logs`) for the
-  console, for the last 7 or 30 days.
+```console
+jq -c 'select(.reason == "unknown_option")' .polls-check/handler.jsonl
+```
 
-### 2. The function's log (what the function decided)
+### What a log line holds
 
-The Lambda writes one JSON line per request and keeps them 365 days. Four
-queries are saved in CloudWatch Logs Insights: in the AWS console go to
-CloudWatch, Logs Insights, **Queries**, and pick one of these (they are
-already pointed at the right log group; choose a time range):
+One JSON line per request: `level` (`INFO` accepted, `WARN` rejected, `ERROR`
+failed), `outcome`, `status`, `reason` (when refused or failed), `pollId` (only
+for a real poll), `responseId`, `bodyBytes`, `requestId`, and for failures
+`errorType` and `errorCode`. It never holds answers, email addresses, tokens,
+IP addresses or the raw body, so it is safe to share. The log group is
+`/natenite/production/polls/submit`.
 
-| Saved query | What it answers |
-| --- | --- |
-| `polls/errors` | Requests that failed on our side (level `ERROR`): status, reason, `errorType`, `errorCode`, poll, response ID, request ID. **Look here first.** |
-| `polls/rejections-by-reason` | Why submissions were turned away, counted. |
-| `polls/submissions-per-day` | Accepted submissions per poll per day. |
-| `polls/recent-requests` | The last 100 requests, one line each. |
-
-A line holds the level (`INFO` accepted, `WARN` rejected, `ERROR` failed),
-`status`, `reason`, `pollId` (only for a real poll), `responseId`,
-`hasEmail`, `hasBrowserToken`, `bodyBytes`, `requestId` and
-`cloudfrontRequestId`. It never holds answers, email addresses, tokens,
-IP addresses or the raw body, so it is safe to share.
-
-What the reasons mean:
+### What the reasons mean
 
 | Reason | Status | Usually |
 | --- | --- | --- |
 | `poll_closed` | 410 | A visitor arrived after `closesAt`. Expected. |
 | `unknown_poll` | 404 | A wrong address, or a poll that was unpublished. |
-| `payload_too_large` | 413 | Body over 6 KB: a poll too big, or a hand-made request. |
-| `invalid_json`, `invalid_request`, `unknown_question`, `missing_answer`, `unknown_option`, `duplicate_option`, `rating_out_of_range`, `invalid_answer`, `answer_too_long`, `invalid_email`, `email_too_long`, `invalid_token` | 400 | The visitor's data did not fit the definition. A few are normal. **A steady stream for one poll means the page and the definition disagree** (for example an edited poll that was not deployed). |
+| `payload_too_large` | 413 | A poll too big to submit, or a hand-made request. `bodyBytes` shows by how much. |
+| any other 400 | 400 | The visitor's data did not fit the definition. A few are normal. **A steady stream for one poll means the page and the definition disagree** (for example an edited poll that was not deployed). |
 | `method_not_allowed`, `not_found` | 405, 404 | Someone probing `/submit`. Harmless. |
 | `email_not_stored` | 500 | The answers were saved but the email address was not; the page tells the visitor to retry. Investigate. |
-| `internal_error` | 500 | Something failed in the function. Find the line with `polls/errors` and read `errorType` and `errorCode` (for example a DynamoDB error). |
+| `internal_error` | 500 | Something failed in the function. Read `errorType` and `errorCode` in `logs.errors`. |
 
 Anything at `ERROR` level is a problem to follow up. Rows of `WARN` are mostly
 visitors' mistakes.
 
-### Cost and limits to keep in mind
+## What is kept and what it costs
 
-- A visitor's body is capped at 6 KB; free text at 500 characters.
-- The firewall allows about 20 submissions per address per 5 minutes.
-- The account's Lambda concurrency quota is 10, which is too low to reserve
-  any for the polls function. Raising it lets you set
-  `"reserved_concurrency": 2` in `config/production/polls/polls.json`.
-- Retention: function logs and access logs 365 days; Athena query results 30
-  days; responses stay until you remove them; email records until removal is
-  requested.
-- Expect about $1 a month for the firewall rule, plus cents for everything else.
-
-## Command reference
-
-| Command | What it does |
-| --- | --- |
-| `make unit-test` | Unit tests and poll-definition checks (no AWS). |
-| `make static` / `make static-check` | Formatters, linters and tests; the second is the read-only CI gate. |
-| `make diff-polls` | Preview what a deploy would change. |
-| `make deploy-polls` | Run the tests, then deploy the polls stack. |
-| `make -s dump-poll poll=<id>` | A poll's responses as JSON. |
-| `make -s query-logs [days=N]` | The routine access-log queries as JSON (default 90 days). |
-| `make purge-emails days=N [yes=1]` | Report or delete email addresses older than N days. |
-| `make delete-email email=<address> [yes=1]` | Report or delete one address's records. |
-| `make cdk-ls`, `make cdk-diff-all` | List stacks; diff every stack. |
+- The function's log is kept for a year. Responses stay until you remove them;
+  email records until removal is requested.
+- Expect about $1 a month for the firewall rule, plus cents for the rest.
+- Limits live in code and settings: sizes in `lambda/submit/limits.py`, the
+  submit rate limit in `config/production/polls/polls.json`, and why the
+  function has no reserved concurrency in the note on `PollsSetting` in
+  `config/settings.py`.

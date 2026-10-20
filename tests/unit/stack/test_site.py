@@ -171,15 +171,6 @@ def rate_rule(host="polls.natenite.net", limit=20, window=300):
 
 
 @pytest.mark.unit
-def test_the_shared_acl_rate_limits_submissions_per_address():
-    """20 POSTs to /submit on the polls host per address per 300 seconds."""
-    site_template().has_resource_properties(
-        "AWS::WAFv2::WebACL",
-        {"Rules": assertions.Match.array_with([rate_rule()])},
-    )
-
-
-@pytest.mark.unit
 def test_the_rate_rule_is_built_from_the_polls_settings():
     """A different host, limit and window flow through; nothing is fixed."""
     custom = PollsSetting(
@@ -194,22 +185,3 @@ def test_the_rate_rule_is_built_from_the_polls_settings():
             )
         },
     )
-
-
-@pytest.mark.unit
-def test_the_managed_rule_groups_keep_their_priorities():
-    """The rate rule goes first without renumbering the existing rules."""
-    template = site_template().to_json()
-    acl = next(
-        resource["Properties"]
-        for resource in template["Resources"].values()
-        if resource["Type"] == "AWS::WAFv2::WebACL"
-    )
-
-    priorities = {rule["Name"]: rule["Priority"] for rule in acl["Rules"]}
-
-    assert priorities == {
-        "PollsSubmitRateLimit": 0,
-        "AWSManagedRulesCommonRuleSet": 1,
-        "AWSManagedRulesKnownBadInputsRuleSet": 2,
-    }

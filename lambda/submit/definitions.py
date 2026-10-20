@@ -5,11 +5,8 @@ Purpose:
   poll file can fail the unit tests before it is deployed.
 """
 
-import json
 import re
 from datetime import datetime, timezone
-
-import limits
 
 # The page fetches /definitions/<id>.json, so the ID doubles as a file name
 # and a URL path segment.
@@ -149,58 +146,10 @@ def _check_questions(definition):
     return problems
 
 
-def worst_case_body_bytes(definition):
-    """Size in bytes of the largest submission a valid poll can receive.
-
-    Longest option for single choice, every option for multiple choice, the
-    widest value for ratings, and a full-length answer of 4-byte characters
-    for free text. Expects a structurally valid definition.
-    """
-    answers = {}
-    for question in definition["questions"]:
-        kind = question["type"]
-        if kind == "single":
-            answers[question["id"]] = max(
-                (option["id"] for option in question["options"]), key=len
-            )
-        elif kind == "multi":
-            answers[question["id"]] = [
-                option["id"] for option in question["options"]
-            ]
-        elif kind == "rating":
-            answers[question["id"]] = max(
-                (question["min"], question["max"]),
-                key=lambda number: (len(str(number)), number),
-            )
-        else:
-            answers[question["id"]] = "\U0001f600" * limits.MAX_TEXT_CHARS
-    body = json.dumps(
-        {"pollId": definition["id"], "answers": answers},
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    return len(body.encode("utf-8"))
-
-
-def _check_body_budget(definition):
-    """The largest submission, plus reserved room, must fit the body limit."""
-    needed = worst_case_body_bytes(definition) + limits.RESERVED_BODY_BYTES
-    if needed > limits.MAX_BODY_BYTES:
-        return [
-            f"body: the largest possible submission needs {needed} bytes "
-            f"including {limits.RESERVED_BODY_BYTES} reserved, over the "
-            f"{limits.MAX_BODY_BYTES} byte limit"
-        ]
-    return []
-
-
 def validate(definition, file_stem):
     """Return the problems found in a poll definition (empty when fine)."""
     if not isinstance(definition, dict):
         return ["a poll definition must be a JSON object"]
-    problems = _check_identity(definition, file_stem) + _check_questions(
+    return _check_identity(definition, file_stem) + _check_questions(
         definition
     )
-    if not problems:
-        problems += _check_body_budget(definition)
-    return problems

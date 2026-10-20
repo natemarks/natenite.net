@@ -25,7 +25,6 @@ from aws_cdk import (
     SymlinkFollowMode,
     aws_cloudfront as cloudfront,
     aws_dynamodb as dynamodb,
-    aws_iam as iam,
     aws_lambda as lambda_,
     aws_logs as logs,
     aws_route53 as r53,
@@ -38,42 +37,8 @@ from aws_cdk import Environment as cdk_environment
 from constructs import Construct
 from config.helper import APP_NAME, PROJECT_ROOT
 from config.settings import EnvironmentSetting, PollsSetting
-from stack.polls_access_log_queries import (
-    LOG_PREFIX,
-    RESULTS_PREFIX,
-    AccessLogQueries,
-)
 from stack.certificate import CertificateStack
 from stack.site import SiteStack
-
-# Saved Logs Insights queries for the periodic check, by name.
-SAVED_QUERIES = {
-    "polls/rejections-by-reason": (
-        'filter outcome = "rejected"\n'
-        "| stats count(*) as rejected by reason\n"
-        "| sort rejected desc"
-    ),
-    "polls/errors": (
-        'filter level = "ERROR"\n'
-        "| fields @timestamp, status, reason, errorType, errorCode, pollId,"
-        " responseId, requestId\n"
-        "| sort @timestamp desc\n"
-        "| limit 50"
-    ),
-    "polls/submissions-per-day": (
-        'filter outcome = "accepted"\n'
-        "| stats count(*) as submissions by pollId,"
-        " datefloor(@timestamp, 1d) as day\n"
-        "| sort day desc, pollId"
-    ),
-    "polls/recent-requests": (
-        'filter event = "submission"\n'
-        "| fields @timestamp, level, outcome, status, reason, pollId,"
-        " bodyBytes, requestId, cloudfrontRequestId\n"
-        "| sort @timestamp desc\n"
-        "| limit 100"
-    ),
-}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -89,13 +54,19 @@ class PollsInput:
 
     def fqdn(self) -> str:
         """Return the fully qualified host name that serves the polls."""
-        return (
-            f"{self.polls_setting.subdomain}.{self.env_setting.default_fqdn}"
-        )
+        return self.polls_setting.fqdn(self.env_setting.default_fqdn)
+
+    def stack_name(self) -> str:
+        """Return the CloudFormation stack name (the log check looks it up)."""
+        return f"{self.prefix()}Stack"
 
     def table_name(self) -> str:
         """Return the responses table name (shared with the owner scripts)."""
         return f"{APP_NAME.lower()}-{self.env_setting.app_env}-polls-responses"
+
+    def log_group_name(self) -> str:
+        """Return the submit function's log group name (the log check reads it)."""
+        return f"/{APP_NAME.lower()}/{self.env_setting.app_env}/polls/submit"
 
     @classmethod
     def from_config_directory(cls, data_path: Path) -> "PollsInput":
@@ -120,80 +91,6 @@ class PollsStack(Stack):
     - SiteStack (for web ACL)
     """
 
-    def _deliver_access_logs(self) -> None:
-        """Send the distribution's access logs to a private bucket as JSON."""
-        prefix = self._prefix
-        bucket = s3.Bucket(
-            self,
-            f"{prefix}AccessLogBucket",
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            enforce_ssl=True,
-            encryption=s3.BucketEncryption.S3_MANAGED,
-            removal_policy=RemovalPolicy.RETAIN,
-            lifecycle_rules=[
-                s3.LifecycleRule(
-                    prefix=f"{LOG_PREFIX}/", expiration=Duration.days(365)
-                ),
-                s3.LifecycleRule(
-                    prefix=f"{RESULTS_PREFIX}/", expiration=Duration.days(30)
-                ),
-            ],
-        )
-        bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="AWSLogsDeliveryWrite",
-                principals=[
-                    iam.ServicePrincipal("delivery.logs.amazonaws.com")
-                ],
-                actions=["s3:PutObject"],
-                resources=[bucket.arn_for_objects("*")],
-                conditions={
-                    "StringEquals": {
-                        "s3:x-amz-acl": "bucket-owner-full-control",
-                        "aws:SourceAccount": self.account,
-                    },
-                    "ArnLike": {
-                        "aws:SourceArn": (
-                            f"arn:aws:logs:{self.region}:{self.account}"
-                            ":delivery-source:*"
-                        )
-                    },
-                },
-            )
-        )
-        source = logs.CfnDeliverySource(
-            self,
-            f"{prefix}AccessLogSource",
-            name=f"{prefix}-access-logs",
-            log_type="ACCESS_LOGS",
-            resource_arn=(
-                f"arn:aws:cloudfront::{self.account}:distribution/"
-                f"{self.distribution.distribution_id}"
-            ),
-        )
-        destination = logs.CfnDeliveryDestination(
-            self,
-            f"{prefix}AccessLogDestination",
-            name=f"{prefix}-access-logs",
-            output_format="json",
-            destination_resource_arn=bucket.arn_for_objects(
-                "cloudfront/polls"
-            ),
-        )
-        delivery = logs.CfnDelivery(
-            self,
-            f"{prefix}AccessLogDelivery",
-            delivery_source_name=source.ref,
-            delivery_destination_arn=destination.attr_arn,
-            s3_enable_hive_compatible_path=True,
-            s3_suffix_path="{yyyy}/{MM}/{dd}",
-        )
-        # Creating a delivery checks it can write, so the policy comes first
-        delivery.node.add_dependency(bucket.policy)
-        AccessLogQueries(
-            self, f"{prefix}AccessLogQueries", bucket=bucket, prefix=prefix
-        )
-
     def __init__(
         self,
         scope: Construct,
@@ -206,7 +103,7 @@ class PollsStack(Stack):
         self.s_input = s_input
         self._prefix = s_input.prefix()
         super().__init__(
-            scope=scope, id=f"{self._prefix}Stack", env=cdk_env, **kwargs
+            scope=scope, id=s_input.stack_name(), env=cdk_env, **kwargs
         )
 
         # Page and definitions are rebuilt from the repository on deploy
@@ -243,24 +140,15 @@ class PollsStack(Stack):
 
         # The function's log group: a year of history, kept if the stack is
         # deleted (the lines hold no personal data). Without this, Lambda
-        # makes a group that never expires and is not managed here.
+        # makes a group that never expires and is not managed here. The name
+        # is fixed so the owner's log check can find the group.
         log_group = logs.LogGroup(
             self,
             f"{self._prefix}SubmitLogGroup",
+            log_group_name=self.s_input.log_group_name(),
             retention=logs.RetentionDays.ONE_YEAR,
             removal_policy=RemovalPolicy.RETAIN,
         )
-
-        # Saved Logs Insights queries for the owner's periodic check. They use
-        # the fields the function writes on each log line.
-        for name, query in SAVED_QUERIES.items():
-            logs.CfnQueryDefinition(
-                self,
-                f"{self._prefix}Query{name.split('/')[1].title().replace('-', '')}",
-                name=name,
-                query_string=query,
-                log_group_names=[log_group.log_group_name],
-            )
 
         # The submit function. `polls` inside its folder is a symlink to the
         # repository's poll definitions; following it bundles the real files.
@@ -360,8 +248,6 @@ function handler(event) {
                 targets.CloudFrontTarget(self.distribution)
             ),
         )
-
-        self._deliver_access_logs()
 
         # The shared page goes at the bucket root. Excluding the definitions
         # prefix keeps this deployment from pruning the definitions.
