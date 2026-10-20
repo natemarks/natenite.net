@@ -2,6 +2,8 @@
 
 Derived from the closed wayfinder map (`map.md`) and its tickets. Every design choice below is a decision already made there; this document orders the work and says how to know each piece is done. Items marked **VERIFY** were not confirmed in the research and must be checked when the step is reached. Nothing here has been built.
 
+**Status, 2026-10-20:** the build is done and this plan is kept only until the planning docs are pruned. The simplify-polls effort removed the CloudFront access logs and everything built on them (the logs bucket, log delivery, the Glue table, the Athena workgroup and queries, and the saved Logs Insights queries); step P6c is marked superseded and the checks for those pieces are gone. Other parts of this plan describe the original design and are left as written.
+
 ## What gets built
 
 | Piece | Where | Decided in |
@@ -16,7 +18,7 @@ Derived from the closed wayfinder map (`map.md`) and its tickets. Every design c
 | Tests | `tests/unit/...`, `site/polls/*.test.js`, golden data under `test_data/` | layout 4, 5, 8 |
 | Make targets, CI | `Makefile`, `.github/workflows/static-checks.yml` | layout 6, 8 |
 
-Resources `PollsStack` creates (all in `us-east-1`): S3 site bucket (private, OAC); `BucketDeployment` for the page and definitions; Python Lambda (reserved concurrency 2) with a Function URL (`AWS_IAM`) and a log group (365-day retention); DynamoDB on-demand table (retained, deletion protection, PITR off); CloudFront distribution for `polls.natenite.net` (cert reused from `CertificateStack`, existing web ACL attached, S3 origin plus Lambda origin on `/submit`, viewer-request rewrite function); Route 53 alias record; CloudFront standard logging v2 to an S3 logs bucket (JSON, 365-day expiry) with an Athena results prefix (about 30 days); Glue database and table with partition projection; Athena workgroup; saved Athena queries and saved Logs Insights queries.
+Resources `PollsStack` creates (all in `us-east-1`): S3 site bucket (private, OAC); `BucketDeployment` for the page and definitions; Python Lambda (reserved concurrency 2) with a Function URL (`AWS_IAM`) and a log group (365-day retention); DynamoDB on-demand table (retained, deletion protection, PITR off); CloudFront distribution for `polls.natenite.net` (cert reused from `CertificateStack`, existing web ACL attached, S3 origin plus Lambda origin on `/submit`, viewer-request rewrite function); Route 53 alias record.
 
 Expected running cost: about $1 a month for the rate rule, plus cents (Lambda, DynamoDB, CloudFront, S3, CloudWatch). Prices: `research/06-verified-pricing.md`.
 
@@ -37,7 +39,7 @@ P2, P3 and P4 need no AWS and can be done in any order or in parallel. P6 needs 
 
 All local synth or docs checks; no AWS resources. Record answers in the PR or a note.
 
-1. **Done (issue 01):** in the pinned `aws-cdk-lib` (now 2.273.0), these were confirmed to exist: `cloudfront_origins.FunctionUrlOrigin.with_origin_access_control`; `lambda_.Code.from_asset(..., follow_symlinks=...)` with `SymlinkFollowMode.ALWAYS`; `aws_logs.CfnDeliverySource`, `CfnDeliveryDestination`, `CfnDelivery` and the property that selects JSON output; `aws_glue.CfnTable`, `aws_athena.CfnWorkGroup`, `CfnNamedQuery`; `aws_logs.CfnQueryDefinition`; the Lambda runtime constant you will use. In 2.260.0 the Function URL OAC origin added only one of the two required Lambda permissions; 2.273.0 adds both, so the repo was bumped to 2.273.0 as its own change before building.
+1. **Done (issue 01):** in the pinned `aws-cdk-lib` (now 2.273.0), these were confirmed to exist: `cloudfront_origins.FunctionUrlOrigin.with_origin_access_control`; `lambda_.Code.from_asset(..., follow_symlinks=...)` with `SymlinkFollowMode.ALWAYS`; `aws_logs.CfnDeliverySource`, `CfnDeliveryDestination`, `CfnDelivery` and the property that selects JSON output; `aws_glue.CfnTable`, `aws_athena.CfnWorkGroup`, `CfnNamedQuery`; `aws_logs.CfnQueryDefinition`; the Lambda runtime constant you will use (the log-delivery, Glue, Athena and saved-query constructs were later removed along with the access-log layer). In 2.260.0 the Function URL OAC origin added only one of the two required Lambda permissions; 2.273.0 adds both, so the repo was bumped to 2.273.0 as its own change before building.
 2. Confirm asset hashes appear in the synthesized template for a Lambda `Code.from_asset` and a `BucketDeployment` (drives the helper in P7).
 3. Confirm `node` is available to `make unit-test` locally and note the version for CI.
 
@@ -97,7 +99,7 @@ Build in `stack/polls.py` following the `SiteStack` pattern (`PollsInput.from_co
 
 **6b. Distribution.** Private S3 site bucket with OAC. `BucketDeployment` for `site/polls/` at the root and `polls/*.json` under `definitions/`. CloudFront distribution: alias `polls.<fqdn>`, certificate from `CertificateStack`, existing web ACL from `SiteStack`, default behavior to S3 with a viewer-request rewrite function (extension-less paths except `/submit` map to `/index.html`), and an additional behavior for `/submit` to the Function URL origin with OAC (`FunctionUrlOrigin.with_origin_access_control`), all methods allowed, caching disabled, origin request policy that does not forward the viewer Host header (**VERIFY**). Route 53 alias record in the existing zone. Mind the existing `SiteStack` habit of index-based OAC overrides: do not copy it; with two origins use the L2 origins.
 
-**6c. Logging and Athena.** Logs S3 bucket (private, expiry rules: raw CloudFront logs 365 days, Athena results about 30 days, bucket policy for log delivery). CloudFront standard logging v2 through `aws_logs` delivery resources with JSON output. Glue database and table (33 columns, partition projection, per the AWS-documented JSON DDL). Athena workgroup with the results location. Saved Athena queries (errors by day, top client IPs, 403s and 429s) and saved Logs Insights queries for the handler.
+**6c. Logging and Athena. Superseded:** removed by the simplify-polls effort. The stack keeps the function's log group (a fixed name, 365-day retention) and nothing else for logs; problems are checked with `make -s check-polls`.
 
 **6d. Wiring.** In `config/inventory.py` add `polls_stack(...)` and call it from `deploy_stacks` after `site_stack`, passing both the certificate and site stacks.
 
@@ -107,7 +109,7 @@ Done when: `cdk synth -c app_env=production` succeeds and `cdk ls` shows `NateNi
 
 - Add a helper in `tests/helper.py` that replaces asset hashes (keys and metadata) with a placeholder before comparing, so golden files change only for infrastructure changes.
 - Add `tests/unit/stack/test_polls.py`: one parametrized `production` golden test, constructing the certificate, site and polls stacks as `test_site.py` does. Generate with `make unit-update_golden`, then read the file.
-- Add targeted assertions that matter beyond the golden: reserved concurrency is 2, the function URL is `AWS_IAM`, the table is retained with deletion protection, the log group retention is 365 days, the logs bucket has both expiry rules.
+- Add targeted assertions that matter beyond the golden: reserved concurrency is 2, the function URL is `AWS_IAM`, the table is retained with deletion protection, the log group retention is 365 days.
 - Add `node --test` to `make unit-test`.
 
 Done when: `make static` passes with no skipped checks.
@@ -133,7 +135,7 @@ Prerequisites: CDK bootstrapped for the account and region (`make cdk-bootstrap`
    - Free text containing HTML-like characters is not blocked by the managed rules (**VERIFY**; if it is, decide whether to override a rule to Count).
    - Rate rule: more than 20 POSTs to `/submit` in 5 minutes from one IP gets blocked.
    - Throttling: drive concurrency above the cap and confirm HTTP 429, then check which of `Url4xxCount`, `Throttles` and `ConcurrentExecutions` moved (closes the open inference in the abuse limits ticket).
-   - CloudFront logs appear in the logs bucket (allow up to a few hours; delivery can lag up to 24 hours) and the saved Athena queries run; check whether WAF blocks show as 403 with result type `Error` (closes that inference).
+   - `make -s check-polls` runs against production and returns a summary: the test submissions appear as log lines, the daily metrics are present, and `incomplete_metrics` is empty. (The log group has a fixed name, so this needs the deploy that sets it.)
 4. Confirm the main site is unaffected (apex and `www` still load).
 
 Rollback: `cdk destroy NateNiteProductionPollsStack` removes everything except the retained table and (if you chose retention) any logs you keep; the Site rate rule remains until reverted in `site.py` and redeployed.
@@ -152,8 +154,7 @@ Rollback: `cdk destroy NateNiteProductionPollsStack` removes everything except t
 - **Concurrency cap of 2:** a burst above 20 requests per second loses submissions until retry; adjustable in `polls.json`.
 - **Version drift:** `requirements.txt` pins `aws-cdk-lib==2.273.0` (bumped from 2.260.0 after the spike; all existing golden tests pass unchanged). Library bumps change the library-provided asset hashes in templates, so keep the golden-test helper normalizing every asset hash.
 - **Golden tag side effect:** do not fix the `iac_project_url` typo (`natenate.net`) inside this work; it is the `iac` tag on every resource and changing it rewrites every golden file. Do it as a separate change.
-- **Logging lag:** CloudFront logs arrive late; do not judge logging by the first hour.
 
 ## Definition of done
 
-`make static` passes; the stack deploys from a clean checkout; every smoke test above has a recorded result; the open inferences from the abuse limits and observability tickets are answered; the launch checklist items are either done or consciously deferred.
+`make static` passes; the stack deploys from a clean checkout; every smoke test above has a recorded result; the open inference from the abuse limits ticket is answered (the observability one, WAF blocks in the CloudFront logs, is moot now that the access logs are gone); the launch checklist items are either done or consciously deferred.

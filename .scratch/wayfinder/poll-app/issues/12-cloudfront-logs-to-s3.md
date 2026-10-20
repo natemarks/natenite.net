@@ -1,6 +1,7 @@
 Status: ready-for-human
 Type: HITL
 Blocked by: 02
+Superseded: the CloudFront access-log layer (log delivery, bucket, Glue table, Athena workgroup and saved queries) was removed by the simplify-polls effort. Problems are now checked with `make -s check-polls`. See `.scratch/simplify-polls/tickets/01-grill-observability-layers.md`.
 
 # 12. CloudFront access logs delivered to S3 (JSON, 365-day expiry)
 
@@ -36,3 +37,4 @@ Spec user stories: 48, 49
 - 2026-10-17: verified live. First log file arrived about 10 minutes after deploy (not hours): `cloudfront/polls/<distribution>.<date>-<hour>.<hash>.gz`, gzipped JSON lines. WAF-blocked POSTs appear as `sc-status` 403 with `x-edge-result-type` Error and `x-edge-detailed-result-type` Error. Requests the function rejects (400, 405) also read Error, so tell them apart by status and by the function log, not by result type.
 - 2026-10-17: live check showed Hive paths do not apply without an explicit suffix path (first file landed flat). Added suffix `{yyyy}/{MM}/{dd}/{HH}`; expect keys `cloudfront/polls/year=.../month=.../day=.../hour=.../`. Verify after deploy.
 - 2026-10-17: verified live after the suffix deploy: keys are now `cloudfront/polls/year=2026/month=10/day=17/hour=14/<dist>.<date>-<hour>.<hash>.gz`. All field values are JSON strings. `cs(Host)` is the cloudfront.net name; the real host is `x-host-header`.
+- 2026-10-20: superseded. The delivery, its bucket and policy were removed from the stack in the simplify-polls effort (the bucket was defined retain-on-delete, so the real bucket stays in the account until it is dealt with in that effort's deploy slice). The checked criteria above record what was true when this was built.
