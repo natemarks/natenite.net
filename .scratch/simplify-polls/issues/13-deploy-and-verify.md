@@ -16,8 +16,8 @@ Deploy the simplified stack and verify it. Before deploying: confirm the respons
 
 - [x] The table is confirmed free of responses worth keeping (or cleared) before the deploy. (As of 2026-10-19 the stack is deployed and `describe-table` reports 0 items, but that count refreshes only about every six hours and the logs show 2 accepted submissions on 2026-10-17, so take a real count.) **Done 2026-10-20:** a real scan shows 0 `RESPONSE#` and 0 `EMAIL#` items (0 items scanned in all).
 - [x] The diff review shows no replacement of the responses table or the site bucket. The only replacement is the log group (its fixed name forces a new group; the old generated-name group is retained with its earlier lines), and that is recorded. **Done 2026-10-20** (the owner ran `make diff-polls`; see the comment below).
-- [ ] After deploy the poll page loads, a test submission is accepted (single choice and at least one other question type), the response ID has the new shape, and the log line has exactly the trimmed fields.
-- [ ] Closed-poll, retry-and-busy and already-answered behaviour are unchanged for a respondent.
+- [x] After deploy the poll page loads, a test submission is accepted (single choice and at least one other question type), the response ID has the new shape, and the log line has exactly the trimmed fields. **Accepted by the owner 2026-10-20:** single-choice storage was not exercised live (the only live poll is multi-choice); it is covered by the unit tests, and the owner will see it in later use if it is a problem.
+- [x] Closed-poll, retry-and-busy and already-answered behaviour are unchanged for a respondent. **Done 2026-10-20:** the owner tested all three in a browser and all work.
 - [x] `make check-polls` against production returns a summary that includes the test submission and daily metrics. **Done 2026-10-20:** `make -s check-polls` exits 0 with `logs` (1 request, accepted, 0 errors), 11 metric series and `incomplete_metrics` empty.
 - [x] The log fetch is checked against the real log group: the real `aws logs filter-log-events` output has the shape the jq program expects (`events[].timestamp` and `events[].message`, pages merged), and the test submission's line appears in `.polls-check/handler.jsonl` with its timestamp. **Done 2026-10-20:** the new log group holds five real events for the test submission (`INIT_START`, `START`, one JSON line, `END`, `REPORT`); events have `timestamp` and `message` as the program expects; the fetch kept only the JSON line, with its timestamp.
 - [x] `make dump-poll` and the email commands (dry-run) still work. **Done 2026-10-20:** `dump-poll` returns `[]` (the table is empty); `purge-emails` and `delete-email` dry runs report 0 records.
@@ -186,4 +186,23 @@ and already-answered browser behaviour.
 
 **Left in slice 13:** the first criterion above, and the closed-poll,
 retry-and-busy and already-answered behaviour in a browser.
+
+**2026-10-20, owner's decision on the single-choice criterion:** not worth a
+live test; any problem will show up in later use. Ticked on that basis. Still
+open: the three browser behaviours (closed poll, retry-and-busy,
+already-answered). The page code under `site/` is unchanged by this effort
+(zero files differ from before the refactor) and every status and reason the
+handler returns is unchanged, so those checks confirm no regression.
+
+**2026-10-20, owner's browser checks:** retry-and-busy works (the busy state
+and the kept answers) and the closed poll works (the poll shows as closed). The
+already-answered check was not reported, so the criterion "closed-poll,
+retry-and-busy and already-answered behaviour are unchanged" stays open for
+that one.
+
+**2026-10-20, slice 13 complete.** The owner confirmed all three browser
+behaviours (already-answered, retry-and-busy, closed poll). Every criterion in
+this slice is now ticked. Still the owner's to decide, outside this slice: the
+test data in the table (one response and one email record), and the launch
+decisions that gate slice 14.
 
